@@ -1,11 +1,11 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { EditorState } from "@codemirror/state";
+  import { EditorState, Compartment, Prec, type Extension } from "@codemirror/state";
   import { EditorView, keymap, drawSelection, highlightActiveLine, placeholder as cmPlaceholder } from "@codemirror/view";
   import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
   import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
   import { languages } from "@codemirror/language-data";
-  import { syntaxHighlighting, HighlightStyle, indentOnInput } from "@codemirror/language";
+  import { syntaxHighlighting, HighlightStyle, indentOnInput, LanguageDescription } from "@codemirror/language";
   import { autocompletion, closeBrackets, type CompletionContext } from "@codemirror/autocomplete";
   import { searchKeymap, highlightSelectionMatches } from "@codemirror/search";
   import { tags as t } from "@lezer/highlight";
@@ -13,11 +13,19 @@
   import { app, personName } from "$lib/app.svelte";
 
   let {
+    path,
     content,
     onchange,
     onsave,
     line,
-  }: { content: string; onchange: (text: string) => void; onsave?: () => void; line?: number } = $props();
+  }: { path: string; content: string; onchange: (text: string) => void; onsave?: () => void; line?: number } = $props();
+
+  // Only Markdown files get live preview, wikilinks and task widgets; every
+  // other file is edited as plain source with syntax highlighting.
+  // The editor is remounted for every file, so reading `path` once is intended.
+  // svelte-ignore state_referenced_locally
+  const isMarkdown = /\.(md|markdown)$/i.test(path);
+  const language = new Compartment();
 
   let host: HTMLDivElement;
   let view: EditorView | undefined;
@@ -151,6 +159,40 @@
     scrollToLine(line);
   });
 
+  const markdownExtensions = (): Extension[] => [
+    markdown({ base: markdownLanguage, codeLanguages: languages, addKeymap: true }),
+    autocompletion({ override: [wikilinkCompletion, tagCompletion], icons: false }),
+    livePreview({
+      followLink: (target) => app.followLink(target),
+      jiraStatus: (key) => {
+        const i = app.jira?.issues[key];
+        return i ? { status: i.status, category: i.statusCategory, summary: i.summary } : null;
+      },
+      openUrl: async (url) => {
+        const href = url.startsWith("jira:") ? `${app.jira?.baseUrl ?? ""}/browse/${url.slice(5)}` : url;
+        try {
+          const { openUrl } = await import("@tauri-apps/plugin-opener");
+          await openUrl(href);
+        } catch {
+          window.open(href, "_blank");
+        }
+      },
+    }),
+    cmPlaceholder("Start writing. [[ links a note, #tag tags it, - [ ] makes a task."),
+  ];
+
+  const sourceTheme = EditorView.theme({
+    ".cm-scroller": { fontFamily: "var(--font-mono)", fontSize: "0.86rem", lineHeight: "1.6" },
+    ".cm-content": { maxWidth: "none", margin: "0" },
+  });
+
+  async function loadSourceLanguage() {
+    const desc = LanguageDescription.matchFilename(languages, path.split("/").pop() ?? path);
+    if (!desc || !view) return;
+    const support = await desc.load();
+    view?.dispatch({ effects: language.reconfigure(support) });
+  }
+
   onMount(() => {
     view = new EditorView({
       parent: host,
@@ -164,25 +206,8 @@
           closeBrackets(),
           highlightSelectionMatches(),
           EditorView.lineWrapping,
-          markdown({ base: markdownLanguage, codeLanguages: languages, addKeymap: true }),
           syntaxHighlighting(highlight),
-          autocompletion({ override: [wikilinkCompletion, tagCompletion], icons: false }),
-          livePreview({
-            followLink: (target) => app.followLink(target),
-            jiraStatus: (key) => {
-              const i = app.jira?.issues[key];
-              return i ? { status: i.status, category: i.statusCategory, summary: i.summary } : null;
-            },
-            openUrl: async (url) => {
-              const href = url.startsWith("jira:") ? `${app.jira?.baseUrl ?? ""}/browse/${url.slice(5)}` : url;
-              try {
-                const { openUrl } = await import("@tauri-apps/plugin-opener");
-                await openUrl(href);
-              } catch {
-                window.open(href, "_blank");
-              }
-            },
-          }),
+          isMarkdown ? markdownExtensions() : [language.of([]), Prec.highest(sourceTheme)],
           keymap.of([
             { key: "Mod-s", run: () => (onsave?.(), true) },
             indentWithTab,
@@ -190,7 +215,6 @@
             ...historyKeymap,
             ...searchKeymap,
           ]),
-          cmPlaceholder("Start writing. [[ links a note, #tag tags it, - [ ] makes a task."),
           theme,
           EditorView.updateListener.of((u) => {
             if (u.docChanged) onchange(u.state.doc.toString());
@@ -198,6 +222,7 @@
         ],
       }),
     });
+    if (!isMarkdown) loadSourceLanguage();
     scrollToLine(line);
     return () => view?.destroy();
   });

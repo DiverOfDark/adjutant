@@ -57,7 +57,7 @@
           <span class="due" class:late={dueIn! < 0} class:soon={dueIn! >= 0 && dueIn! <= 2}>{dueLabel(task.due)}</span>
         {/if}
         {#if showSource && task.file !== "tasks.md"}
-          <button class="src" onclick={() => app.openNote(task.file, task.line)}>{task.file.replace(/\.md$/, "")}</button>
+          <button class="src" onclick={() => app.openNote(task.file, task.line)}>{task.file}</button>
         {/if}
       </span>
     {/if}

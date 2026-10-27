@@ -164,6 +164,9 @@ function build(view: EditorView, hooks: PreviewHooks): DecorationSet {
             if (!isActive(node.from)) add(node.from, node.to, Decoration.replace({ widget: new RuleWidget() }));
             break;
           case "Link": {
+            // The inner "[target]" of a [[wikilink]] parses as a link; the
+            // wikilink pass below owns it.
+            if (state.sliceDoc(node.from - 1, node.from) === "[" && state.sliceDoc(node.to, node.to + 1) === "]") return false;
             const text = node.node.getChildren("LinkMark");
             const url = node.node.getChild("URL");
             if (text.length >= 2) {

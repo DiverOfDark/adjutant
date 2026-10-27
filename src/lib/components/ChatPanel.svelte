@@ -191,7 +191,7 @@
 
   <div class="compose">
     <div class="chips">
-      {#each ACTIONS.filter((a) => !a.needsPerson && (!a.needsFile || openNote)) as a}
+      {#each ACTIONS.filter((a) => !a.needsPerson && (!a.needsFile || (openNote && /\.(md|markdown)$/i.test(openNote)))) as a}
         <button class="chip" onclick={() => runAction(a.id)} disabled={chat.busy || chat.connecting}>{a.label}</button>
       {/each}
       <button class="chip" class:on={mode === "repo"} onclick={() => setMode("repo")}><GitBranch size={13} /> Ask about a repo</button>

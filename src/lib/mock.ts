@@ -58,6 +58,7 @@ Senior engineer on the Platform team. Wants to lead the ingestion rewrite.
   "me/goals.md": "# My goals\n\n- Grow two senior engineers into tech leads.\n- Ship the ingestion rewrite by end of Q1.\n",
   "inbox/2026-10-27-alert-noise.md": "ask platform about rebalancing alert noise - too many pages last week, maybe tune thresholds. Sam mentioned PLAT-130.\n",
   "inbox/2026-10-26-offsite.md": "offsite idea: half day on roadmap, half day on team health survey results\n",
+  "mise.toml": '[tools]\nnode = "24"\n"npm:@agentclientprotocol/claude-agent-acp" = "0.98.0"\nripgrep = "14"\n\n[env]\nJIRA_SITE = "https://example.atlassian.net"\n',
   "AGENTS.md": "# Agent guidelines for this vault\n\nNever delete notes. Move, link and append instead.\n",
   "reports/2026-W43.md": "# Weekly report 2026-W43\n\n## Shipped\n- PLAT-118 shard balancer config\n",
   "log/2026-10.md": `# 2026-10\n\n## ${plus(-1)}\n- Closed PLAT-118.\n- Decided to postpone the ingestion rewrite kickoff to next sprint.\n`,

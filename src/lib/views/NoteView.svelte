@@ -20,10 +20,11 @@
   let error = $state<string | null>(null);
   let editor: Editor | undefined = $state();
 
-  const crumbs = $derived(path.replace(/\.md$/, "").split("/"));
+  const crumbs = $derived(path.split("/"));
   const stem = $derived(path.replace(/\.md$/, ""));
+  const isMarkdown = $derived(/\.(md|markdown)$/i.test(path));
   const sourceUrl = $derived(content?.match(/^---\n[\s\S]*?^source:\s*(\S+)[\s\S]*?^---/m)?.[1] ?? null);
-  const isPerson = $derived(path.startsWith("people/") && path.split("/").length === 2);
+  const isPerson = $derived(isMarkdown && path.startsWith("people/") && path.split("/").length === 2);
   const personTasks = $derived(isPerson ? app.openTasks.filter((t) => t.people.includes(stem) || (t.file === path)) : []);
   const waitingOn = $derived(personTasks.filter((t) => t.section === "Waiting on"));
   const otherTasks = $derived(personTasks.filter((t) => t.section !== "Waiting on"));
@@ -123,9 +124,9 @@
         <RefreshCcw size={15} /> Re-sync from source
       </button>
     {/if}
-    <button class="quiet" onclick={() => chat.ask(extract.prompt({ file: path }), [path], `Extract tasks from ${path}`)} disabled={chat.busy || visibility?.hidden}>
+    {#if isMarkdown}<button class="quiet" onclick={() => chat.ask(extract.prompt({ file: path }), [path], `Extract tasks from ${path}`)} disabled={chat.busy || visibility?.hidden}>
       <ListPlus size={15} /> Extract tasks
-    </button>
+    </button>{/if}
   </header>
 
   {#if isPerson}
@@ -153,7 +154,7 @@
     {#if error}
       <p class="error">{error}</p>
     {:else if content !== null}
-      <Editor bind:this={editor} {content} {onchange} onsave={save} {line} />
+      <Editor bind:this={editor} {path} {content} {onchange} onsave={save} {line} />
     {/if}
   </div>
 
@@ -164,7 +165,7 @@
         {#each backlinks as b}
           <li>
             <button onclick={() => app.openNote(b.file, b.line)}>
-              <span class="from">{b.file.replace(/\.md$/, "")}</span>
+              <span class="from">{b.file}</span>
               <span class="ctx">{tidy(b.text)}</span>
             </button>
           </li>

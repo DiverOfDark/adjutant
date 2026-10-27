@@ -66,7 +66,7 @@
 
   const items = $derived.by<Item[]>(() => {
     const q = query.trim();
-    const notes: Item[] = app.notes.map((n) => ({ label: noteTitle(n), hint: n.replace(/\.md$/, ""), run: () => app.openNote(n) }));
+    const notes: Item[] = app.notes.map((n) => ({ label: noteTitle(n), hint: n, run: () => app.openNote(n) }));
     if (!q) return [...commands.slice(0, 7), ...notes.slice(0, 8)];
     const all = q.startsWith(">") ? commands : [...notes, ...commands];
     const qq = q.replace(/^>/, "").trim();

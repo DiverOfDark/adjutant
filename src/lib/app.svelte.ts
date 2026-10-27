@@ -109,7 +109,7 @@ class AppState {
 export const app = new AppState();
 
 export function noteTitle(path: string) {
-  return path.split("/").pop()!.replace(/\.md$/, "");
+  return path.split("/").pop()!;
 }
 
 export function personName(link: string) {

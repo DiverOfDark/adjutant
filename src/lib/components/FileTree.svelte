@@ -44,7 +44,7 @@
     >
       <span class="chev"></span>
       <FileText size={15} />
-      <span class="name">{child.name.replace(/\.md$/, "")}</span>
+      <span class="name">{child.name}</span>
     </button>
   {/if}
 {/each}

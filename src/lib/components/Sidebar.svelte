@@ -137,11 +137,11 @@
     <div class="scroll">
       {#if results}
         {#each results.fileMatches as f}
-          <button class="hit file" onclick={() => app.openNote(f)}>{f.replace(/\.md$/, "")}</button>
+          <button class="hit file" onclick={() => app.openNote(f)}>{f}</button>
         {/each}
         {#each results.hits as hit}
           <button class="hit" onclick={() => app.openNote(hit.file, hit.line)}>
-            <span class="where">{hit.file.replace(/\.md$/, "")}<span class="ln">:{hit.line + 1}</span></span>
+            <span class="where">{hit.file}<span class="ln">:{hit.line + 1}</span></span>
             <span class="text">{@html highlight(hit.text, hit.ranges)}</span>
           </button>
         {/each}
