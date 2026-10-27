@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { FilePlus, FolderPlus, RefreshCw } from "@lucide/svelte";
-  import { api, type SearchResults, type TreeNode } from "$lib/api";
-  import { app, personName } from "$lib/app.svelte";
+  import { FilePlus, FolderPlus, RefreshCw, GitBranch } from "@lucide/svelte";
+  import { api, type RepoInfo, type SearchResults, type TreeNode } from "$lib/api";
+  import { app, personName, relTime } from "$lib/app.svelte";
   import FileTree from "./FileTree.svelte";
 
   let query = $state("");
@@ -9,6 +9,26 @@
   let searchInput: HTMLInputElement | undefined = $state();
   let timer: ReturnType<typeof setTimeout>;
   let menu = $state<{ x: number; y: number; node: TreeNode } | null>(null);
+  let repos = $state<RepoInfo[]>([]);
+  let pulling = $state<string | null>(null);
+
+  $effect(() => {
+    app.revision;
+    if (app.vault) api.reposList().then((r) => (repos = r)).catch(() => (repos = []));
+  });
+
+  async function pull(name: string) {
+    pulling = name;
+    try {
+      const out = await api.repoPull(name);
+      app.notify(`${name}: ${out.split("\n").at(-1)}`);
+      repos = await api.reposList();
+    } catch (e) {
+      app.notify(String(e), "error");
+    } finally {
+      pulling = null;
+    }
+  }
 
   $effect(() => {
     if (app.sidebar === "search") setTimeout(() => searchInput?.focus(), 0);
@@ -95,6 +115,19 @@
       {#if app.tree}
         <FileTree node={app.tree} oncontext={(e, node) => { e.preventDefault(); menu = { x: e.clientX, y: e.clientY, node }; }} />
       {/if}
+      {#if repos.length}
+        <h3 class="sub">Repositories</h3>
+        {#each repos as r (r.name)}
+          <div class="repo" title={r.remote ?? r.path}>
+            <GitBranch size={14} />
+            <span class="rname">{r.name}</span>
+            <span class="pulled">{r.lastPulled ? relTime(r.lastPulled) : ""}</span>
+            <button class="icon" aria-label="Pull {r.name}" title="git pull" onclick={() => pull(r.name)} disabled={pulling === r.name}>
+              <RefreshCw size={13} class={pulling === r.name ? "spin" : ""} />
+            </button>
+          </div>
+        {/each}
+      {/if}
     </div>
   {:else if app.sidebar === "search"}
     <header><h2>Search</h2></header>
@@ -168,6 +201,34 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  .sub {
+    margin: 1.2rem 0.5rem 0.3rem;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--muted);
+  }
+  .repo {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.1rem 0.2rem 0.1rem 0.5rem;
+    font-size: 0.85rem;
+    color: var(--ink-2);
+  }
+  .repo :global(svg) {
+    color: var(--faint);
+    flex: none;
+  }
+  .rname {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .pulled {
+    font-size: 0.72rem;
+    color: var(--faint);
   }
   .pad {
     padding: 0 0.6rem 0.5rem;

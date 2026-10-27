@@ -68,6 +68,8 @@ export interface Visibility {
   /** Agent that may read this file, null when hidden from agents. */
   agent: string | null;
   hidden: boolean;
+  /** The folder is pinned to `agent` in .vault/config.toml. */
+  pinned: boolean;
 }
 
 // ---------- Tasks ----------
@@ -282,6 +284,8 @@ export const api = {
     call<void>("permission_respond", { requestId, optionId, alwaysToolKind }),
   sessionsList: () => call<SavedSession[]>("sessions_list"),
   sessionSave: (session: SavedSession) => call<void>("session_save", { session }),
+  sessionLoad: (id: string) => call<SavedSession>("session_load", { id }),
+  repoPull: (name: string) => call<string>("repo_pull", { name }),
   // jira
   jiraSettings: () => call<JiraSettings>("jira_settings"),
   jiraSaveSettings: (settings: Omit<JiraSettings, "hasToken">, token: string | null) =>

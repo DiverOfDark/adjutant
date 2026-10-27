@@ -169,6 +169,8 @@ pub async fn repos_list(state: State<'_, AppState>) -> CmdResult<Vec<vault::Repo
 pub struct Visibility {
     agent: Option<String>,
     hidden: bool,
+    /// True when `[folders]` pins this file's folder to a specific agent.
+    pinned: bool,
 }
 
 /// Which agent may read `path`, per `[folders]` in the vault config.
@@ -181,10 +183,12 @@ pub async fn note_visibility(state: State<'_, AppState>, path: String) -> CmdRes
             Some("none") => Visibility {
                 agent: None,
                 hidden: true,
+                pinned: false,
             },
             Some(agent) => Visibility {
                 agent: Some(agent.to_string()),
                 hidden: false,
+                pinned: true,
             },
             None => Visibility {
                 agent: Some(
@@ -194,6 +198,7 @@ pub async fn note_visibility(state: State<'_, AppState>, path: String) -> CmdRes
                         .unwrap_or_else(|| "the default agent".into()),
                 ),
                 hidden: false,
+                pinned: false,
             },
         })
     })
@@ -246,6 +251,46 @@ pub async fn session_save(state: State<'_, AppState>, session: serde_json::Value
             serde_json::to_vec(&session)?,
         )?;
         Ok(())
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn session_load(state: State<'_, AppState>, id: String) -> CmdResult<serde_json::Value> {
+    let v = state.vault()?;
+    blocking(move || {
+        anyhow::ensure!(
+            id.chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_'),
+            "invalid session id"
+        );
+        let bytes = std::fs::read(v.join(".vault/sessions").join(format!("{id}.json")))?;
+        Ok(serde_json::from_slice(&bytes)?)
+    })
+    .await
+}
+
+/// `git pull --ff-only` in `repos/<name>`. Deterministic: no agent involved.
+#[tauri::command]
+pub async fn repo_pull(state: State<'_, AppState>, name: String) -> CmdResult<String> {
+    let v = state.vault()?;
+    blocking(move || {
+        anyhow::ensure!(
+            !name.is_empty() && !name.contains(['/', '\\']) && name != "..",
+            "invalid repository name"
+        );
+        let dir = v.join("repos").join(&name);
+        let out = std::process::Command::new("git")
+            .args(["pull", "--ff-only"])
+            .current_dir(&dir)
+            .output()?;
+        let text = format!(
+            "{}{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        anyhow::ensure!(out.status.success(), "git pull failed: {}", text.trim());
+        Ok(text.trim().to_string())
     })
     .await
 }

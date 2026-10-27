@@ -69,3 +69,22 @@ export function repoQuestion(url: string, question: string) {
     `otherwise run \`git -C repos/${name} pull --ff-only\`. Then answer, citing file paths and line numbers:\n\n${question}`
   );
 }
+
+export function importPage(url: string) {
+  const today = new Date().toISOString().slice(0, 10);
+  return (
+    `Import this page into the vault: ${url}\n` +
+    `Fetch it with your fetch tool, or the browser MCP server if it needs my login (read-only: never click anything that changes data). ` +
+    `For Confluence prefer the Atlassian MCP server if available, and import child pages too if I asked for a page tree. ` +
+    `Save it as clean Markdown under sources/ (Confluence pages under sources/confluence/), file name from the title in kebab-case, starting with front matter:\n` +
+    `---\nsource: ${url}\ntitle: <page title>\nfetched: ${today}\n---\n` +
+    `Keep headings, lists, tables and links; drop navigation and boilerplate. Turn links to other imported pages into [[wikilinks]]. Then give me a three-line summary.`
+  );
+}
+
+export function resyncSource(file: string, url: string) {
+  return (
+    `Re-sync ${file} from its source ${url}. Fetch the current page, convert it to Markdown the same way, ` +
+    `and update ${file} (keep the front matter, set fetched to today). Propose the edit as a diff so I can review it before it is written.`
+  );
+}

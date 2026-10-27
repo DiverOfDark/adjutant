@@ -75,6 +75,12 @@ export class ChatState {
       .catch(() => {});
   }
 
+  /** Shows a saved conversation. Sending starts a new session. */
+  showSaved(items: ChatItem[]) {
+    this.items = items;
+    this.sessionId = null;
+  }
+
   async newSession() {
     this.items = [];
     this.sessionId = await api.chatNewSession();

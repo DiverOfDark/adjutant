@@ -59,6 +59,8 @@ pub fn run() {
             vault::note_visibility,
             vault::sessions_list,
             vault::session_save,
+            vault::session_load,
+            vault::repo_pull,
             tasks::tasks_list,
             tasks::task_complete,
             tasks::task_reopen,

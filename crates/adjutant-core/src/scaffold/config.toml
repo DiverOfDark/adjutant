@@ -146,3 +146,15 @@ Produce:
 Rules: cite notes as [[path/without-extension]] links and tickets by key; do not
 invent meetings or tasks. Return Markdown only (no preamble, no code fences).
 """
+
+# MCP servers handed to every agent session (ACP McpServer format).
+# Jira via the Atlassian MCP server, or a read-only browser for page import:
+# [[mcp_servers]]
+# type = "http"
+# name = "atlassian"
+# url = "https://mcp.atlassian.com/v1/sse"
+#
+# [[mcp_servers]]
+# name = "browser"
+# command = "npx"
+# args = ["@browsermcp/mcp@latest"]

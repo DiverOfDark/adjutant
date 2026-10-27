@@ -47,6 +47,7 @@
 
   onMount(() => {
     input?.focus();
+    setTimeout(() => input?.focus(), 50);
     const f = () => setTimeout(() => input?.focus(), 30);
     window.addEventListener("focus", f);
     return () => window.removeEventListener("focus", f);

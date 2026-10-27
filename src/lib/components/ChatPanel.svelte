@@ -1,10 +1,10 @@
 <script lang="ts">
   import { onMount, tick } from "svelte";
-  import { ArrowUp, Square, Plus, GitBranch, X } from "@lucide/svelte";
-  import { api, onAgentEvent, type Discovery } from "$lib/api";
+  import { ArrowUp, Square, Plus, GitBranch, X, History, Globe } from "@lucide/svelte";
+  import { api, onAgentEvent, type Discovery, type SavedSession, type Visibility } from "$lib/api";
   import { app } from "$lib/app.svelte";
   import { chat } from "$lib/chat.svelte";
-  import { ACTIONS, repoQuestion } from "$lib/actions";
+  import { ACTIONS, importPage, repoQuestion } from "$lib/actions";
   import Markdown from "./Markdown.svelte";
   import ToolCallCard from "./ToolCallCard.svelte";
   import PermissionCard from "./PermissionCard.svelte";
@@ -12,14 +12,40 @@
   let discovery = $state<Discovery | null>(null);
   let selected = $state<string | null>(null);
   let input = $state("");
-  let repoUrl = $state("");
-  let repoMode = $state(false);
+  let url = $state("");
+  let mode = $state<"chat" | "repo" | "import">("chat");
+  let history = $state<SavedSession[] | null>(null);
+  let visibility = $state<Visibility | null>(null);
   let scroller: HTMLDivElement | undefined = $state();
   let textarea: HTMLTextAreaElement | undefined = $state();
   let showLog = $state(false);
 
   const openNote = $derived(app.view.kind === "note" ? app.view.path : null);
   const selectedAgent = $derived(discovery?.agents.find((a) => a.id === selected));
+  const pinnedAgent = $derived(
+    visibility?.pinned && visibility.agent && visibility.agent !== selected ? discovery?.agents.find((a) => a.id === visibility!.agent) : null,
+  );
+
+  $effect(() => {
+    const p = openNote;
+    visibility = null;
+    if (p) api.noteVisibility(p).then((v) => (visibility = v)).catch(() => {});
+  });
+
+  async function toggleHistory() {
+    history = history ? null : await api.sessionsList();
+  }
+
+  async function openSaved(id: string) {
+    const s = await api.sessionLoad(id);
+    chat.showSaved(s.items as never);
+    history = null;
+  }
+
+  function setMode(m: typeof mode) {
+    mode = mode === m ? "chat" : m;
+    url = "";
+  }
 
   async function discover() {
     discovery = await api.agentsDiscover().catch(() => null);
@@ -33,11 +59,23 @@
   async function submit(e?: Event) {
     e?.preventDefault();
     let text = input.trim();
+    if (mode === "import") {
+      if (!url.trim()) return;
+      const label = `Import ${url.trim()}${text ? `: ${text}` : ""}`;
+      text = importPage(url.trim()) + (text ? `\n\nAlso: ${text}` : "");
+      input = "";
+      mode = "chat";
+      return chat.ask(text, [], label);
+    }
     if (!text) return;
-    if (repoMode && repoUrl.trim()) text = repoQuestion(repoUrl.trim(), text);
+    let label: string | undefined;
+    if (mode === "repo" && url.trim()) {
+      label = `${text}\n(${url.trim()})`;
+      text = repoQuestion(url.trim(), text);
+    }
     input = "";
     if (!chat.sessionId) await chat.connect(selected);
-    await chat.send(text, openNote && text.includes("this note") ? [openNote] : []);
+    await chat.send(text, openNote && text.includes("this note") ? [openNote] : [], label);
   }
 
   function onKey(e: KeyboardEvent) {
@@ -83,6 +121,7 @@
         {/each}
       </select>
     </div>
+    <button class="icon" title="Past conversations" aria-label="Past conversations" aria-expanded={!!history} onclick={toggleHistory}><History size={16} /></button>
     {#if chat.sessionId && chat.agentId === selected}
       <button class="icon" title="New conversation" aria-label="New conversation" onclick={() => chat.newSession()} disabled={chat.busy}><Plus size={17} /></button>
     {:else}
@@ -90,6 +129,23 @@
     {/if}
     <button class="icon" title="Hide (Ctrl+J)" aria-label="Hide agent panel" onclick={() => (app.agentOpen = false)}><X size={17} /></button>
   </header>
+
+  {#if history}
+    <div class="history">
+      {#each history as h (h.id)}
+        <button onclick={() => openSaved(h.id)}><span>{h.title}</span><span class="when">{new Date(h.updatedAt).toLocaleDateString()}</span></button>
+      {:else}
+        <p>No saved conversations yet. They are kept in <code>.vault/sessions/</code>.</p>
+      {/each}
+    </div>
+  {/if}
+
+  {#if pinnedAgent}
+    <div class="banner">
+      This folder is pinned to {pinnedAgent.name}.
+      <button class="small" onclick={() => { selected = pinnedAgent!.id; connect(); }}>Switch to {pinnedAgent.name}</button>
+    </div>
+  {/if}
 
   {#if discovery?.miseUntrusted}
     <div class="banner">
@@ -138,10 +194,16 @@
       {#each ACTIONS.filter((a) => !a.needsPerson && (!a.needsFile || openNote)) as a}
         <button class="chip" onclick={() => runAction(a.id)} disabled={chat.busy || chat.connecting}>{a.label}</button>
       {/each}
-      <button class="chip" class:on={repoMode} onclick={() => (repoMode = !repoMode)}><GitBranch size={13} /> Ask about a repo</button>
+      <button class="chip" class:on={mode === "repo"} onclick={() => setMode("repo")}><GitBranch size={13} /> Ask about a repo</button>
+      <button class="chip" class:on={mode === "import"} onclick={() => setMode("import")}><Globe size={13} /> Import a page</button>
     </div>
-    {#if repoMode}
-      <input class="repo" bind:value={repoUrl} placeholder="Repository URL, e.g. git@github.com:org/service.git" aria-label="Repository URL" />
+    {#if mode !== "chat"}
+      <input
+        class="repo"
+        bind:value={url}
+        placeholder={mode === "repo" ? "Repository URL, e.g. git@github.com:org/service.git" : "Page URL (Confluence, docs, anything readable)"}
+        aria-label={mode === "repo" ? "Repository URL" : "Page URL"}
+      />
     {/if}
     <form onsubmit={submit}>
       <textarea
@@ -150,13 +212,13 @@
         oninput={autosize}
         onkeydown={onKey}
         rows="1"
-        placeholder={repoMode ? "Where is index rebalancing triggered?" : "Ask, or tell it what to file"}
+        placeholder={mode === "repo" ? "Where is index rebalancing triggered?" : mode === "import" ? "Optional: what to focus on, or import the whole page tree" : "Ask, or tell it what to file"}
         aria-label="Message"
       ></textarea>
       {#if chat.busy}
         <button type="button" class="send stop" aria-label="Stop" title="Stop" onclick={() => chat.cancel()}><Square size={14} /></button>
       {:else}
-        <button type="submit" class="send" aria-label="Send" title="Send (Enter)" disabled={!input.trim() || chat.connecting}><ArrowUp size={17} /></button>
+        <button type="submit" class="send" aria-label="Send" title="Send (Enter)" disabled={(mode === "import" ? !url.trim() : !input.trim()) || chat.connecting}><ArrowUp size={17} /></button>
       {/if}
     </form>
     {#if chat.stderrTail.length}
@@ -224,6 +286,45 @@
     background: var(--brass-wash);
     font-size: 0.82rem;
     line-height: 1.45;
+  }
+  .history {
+    margin: 0.5rem 0.8rem 0;
+    max-height: 40%;
+    overflow-y: auto;
+    border-radius: var(--radius-m);
+    background: var(--sheet);
+    box-shadow: var(--shadow-pop);
+    padding: 0.3rem;
+  }
+  .history button {
+    all: unset;
+    box-sizing: border-box;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    gap: 0.8rem;
+    width: 100%;
+    padding: 0.4rem 0.6rem;
+    border-radius: var(--radius-s);
+    font-size: 0.85rem;
+  }
+  .history button:hover {
+    background: var(--sunken);
+  }
+  .history span:first-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .history .when {
+    flex: none;
+    color: var(--muted);
+    font-size: 0.78rem;
+  }
+  .history p {
+    margin: 0.4rem 0.6rem;
+    font-size: 0.82rem;
+    color: var(--muted);
   }
   .banner.bad {
     background: var(--signal-wash);

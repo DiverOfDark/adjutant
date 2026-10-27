@@ -116,6 +116,26 @@ pub async fn prepare_launch(
     .await
 }
 
+/// MCP servers from `.vault/config.toml`, with `env`/`headers` defaulted.
+pub fn mcp_servers(vault: &Path) -> Vec<serde_json::Value> {
+    VaultConfig::load(vault)
+        .map(|c| c.mcp_servers)
+        .unwrap_or_default()
+        .into_iter()
+        .map(|mut s| {
+            if let Some(o) = s.as_object_mut() {
+                if o.contains_key("url") {
+                    o.entry("headers").or_insert(serde_json::json!([]));
+                } else {
+                    o.entry("args").or_insert(serde_json::json!([]));
+                    o.entry("env").or_insert(serde_json::json!([]));
+                }
+            }
+            s
+        })
+        .collect()
+}
+
 /// Starts `agent_id` (or the vault default), replacing any running agent.
 #[tauri::command]
 pub async fn agent_connect(

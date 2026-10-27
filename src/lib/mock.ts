@@ -251,7 +251,7 @@ export async function mockInvoke<T>(cmd: string, a: Record<string, any>): Promis
     }
     case "templates_list": return r(["one-on-one", "meeting", "person", "decision"]);
     case "repos_list": return r([{ name: "shard-balancer", path: "repos/shard-balancer", remote: "git@github.com:example/shard-balancer.git", lastPulled: plus(-2) }]);
-    case "note_visibility": return r(a.path.startsWith("people/") ? { agent: null, hidden: true } : { agent: "Claude Agent", hidden: false });
+    case "note_visibility": return r(a.path.startsWith("people/") ? { agent: null, hidden: true, pinned: false } : { agent: "claude-agent-acp", hidden: false, pinned: false });
     case "tasks_list": return r(parseTasks());
     case "task_complete": {
       const lines = files[a.file].split("\n");
@@ -279,7 +279,15 @@ export async function mockInvoke<T>(cmd: string, a: Record<string, any>): Promis
     case "agent_connect": return r({ agentInfo: { title: "Claude Agent", version: "0.98.0" }, agentCapabilities: {}, protocolVersion: 1 });
     case "chat_new_session": return r(`s${++mockSession}`);
     case "chat_prompt": await fakeTurn(a.sessionId, a.parts[0]?.text ?? ""); return r("end_turn");
-    case "sessions_list": return r([]);
+    case "sessions_list": return r([
+      { id: "s-old-1", agentId: "claude-agent-acp", title: "Plan my day", updatedAt: plus(-1) + "T08:31:00Z", items: [] },
+      { id: "s-old-2", agentId: "claude-agent-acp", title: "Where is index rebalancing triggered?", updatedAt: plus(-3) + "T14:02:00Z", items: [] },
+    ]);
+    case "session_load": return r({ id: a.id, agentId: "claude-agent-acp", title: "Plan my day", updatedAt: plus(-1), items: [
+      { kind: "user", id: "h1", text: "Plan my day" },
+      { kind: "agent", id: "h2", text: "Top three: **PLAT-123 review**, the 1:1 with [[people/alex]], and the hiring plan." },
+    ] });
+    case "repo_pull": return r("Already up to date.");
     case "jira_settings": return r({ baseUrl: jira.baseUrl, email: "me@example.com", queries: { mine: "assignee = currentUser() AND resolution = Unresolved", platform: "project = PLAT AND resolution = Unresolved" }, hasToken: true });
     case "jira_cache":
     case "jira_sync": return r(jira);

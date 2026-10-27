@@ -315,7 +315,7 @@ async fn run_agent_job(
         output.map(|o| format!(" to {o}")).unwrap_or_default()
     );
     let result = async {
-        let session = handle.new_session(vec![]).await?;
+        let session = handle.new_session(crate::agent::mcp_servers(vault)).await?;
         tokio::time::timeout(
             AGENT_JOB_TIMEOUT,
             handle.prompt(&session, vec![PromptPart::Text { text: full_prompt }]),

@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { ChevronRight, EyeOff, Eye, ListPlus, FileSignature } from "@lucide/svelte";
+  import { ChevronRight, EyeOff, Eye, ListPlus, FileSignature, RefreshCcw } from "@lucide/svelte";
   import { api, type Backlink, type Visibility } from "$lib/api";
   import { app, personName } from "$lib/app.svelte";
   import { chat } from "$lib/chat.svelte";
-  import { ACTIONS } from "$lib/actions";
+  import { ACTIONS, resyncSource } from "$lib/actions";
   import Editor from "$lib/editor/Editor.svelte";
   import TaskRow from "$lib/components/TaskRow.svelte";
 
@@ -22,6 +22,7 @@
 
   const crumbs = $derived(path.replace(/\.md$/, "").split("/"));
   const stem = $derived(path.replace(/\.md$/, ""));
+  const sourceUrl = $derived(content?.match(/^---\n[\s\S]*?^source:\s*(\S+)[\s\S]*?^---/m)?.[1] ?? null);
   const isPerson = $derived(path.startsWith("people/") && path.split("/").length === 2);
   const personTasks = $derived(isPerson ? app.openTasks.filter((t) => t.people.includes(stem) || (t.file === path)) : []);
   const waitingOn = $derived(personTasks.filter((t) => t.section === "Waiting on"));
@@ -116,6 +117,11 @@
       <span class="vis" class:hidden={visibility.hidden} title={visibility.hidden ? "Agents can't read this folder (.vault/config.toml)" : `Readable by ${visibility.agent}`}>
         {#if visibility.hidden}<EyeOff size={14} /> Hidden from agents{:else}<Eye size={14} /> {visibility.agent}{/if}
       </span>
+    {/if}
+    {#if sourceUrl}
+      <button class="quiet" title={sourceUrl} onclick={() => chat.ask(resyncSource(path, sourceUrl!), [path], `Re-sync ${path} from source`)} disabled={chat.busy || visibility?.hidden}>
+        <RefreshCcw size={15} /> Re-sync from source
+      </button>
     {/if}
     <button class="quiet" onclick={() => chat.ask(extract.prompt({ file: path }), [path], `Extract tasks from ${path}`)} disabled={chat.busy || visibility?.hidden}>
       <ListPlus size={15} /> Extract tasks

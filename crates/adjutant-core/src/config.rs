@@ -22,6 +22,10 @@ pub struct VaultConfig {
     #[serde(rename = "schedules")]
     pub schedules: Vec<ScheduleConfig>,
     pub hotkeys: Hotkeys,
+    /// MCP servers handed to every agent session, as ACP `McpServer` JSON:
+    /// `{ name, command, args, env = [] }` (stdio) or
+    /// `{ type = "http", name, url, headers = [] }`.
+    pub mcp_servers: Vec<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
