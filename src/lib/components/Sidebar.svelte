@@ -2,6 +2,7 @@
   import { FilePlus, FolderPlus, RefreshCw, GitBranch } from "@lucide/svelte";
   import { api, type RepoInfo, type SearchResults, type TreeNode } from "$lib/api";
   import { app, personName, relTime } from "$lib/app.svelte";
+  import { checkPath, dialog, withMd } from "$lib/dialog.svelte";
   import FileTree from "./FileTree.svelte";
 
   let query = $state("");
@@ -42,10 +43,18 @@
   }
 
   async function newNote(dir = "") {
-    const name = prompt("New note name", dir ? `${dir}/` : "");
+    const name = await dialog.prompt({
+      title: "New note",
+      label: "Name or path in the vault",
+      value: dir ? `${dir}/` : "",
+      placeholder: "people/alex",
+      confirm: "Create",
+      validate: checkPath,
+      preview: (v) => `Creates ${withMd(v)}`,
+    });
     if (!name) return;
     try {
-      const path = await api.noteCreate(name.endsWith(".md") ? name : `${name}.md`);
+      const path = await api.noteCreate(withMd(name));
       await app.refresh();
       app.openNote(path);
     } catch (e) {
@@ -53,16 +62,35 @@
     }
   }
 
-  async function newFolder() {
-    const name = prompt("New folder");
+  async function newFolder(dir = "") {
+    const name = await dialog.prompt({
+      title: "New folder",
+      label: "Name or path in the vault",
+      value: dir ? `${dir}/` : "",
+      placeholder: "teams/platform",
+      confirm: "Create",
+      validate: checkPath,
+    });
     if (!name) return;
-    await api.dirCreate(name);
-    await app.refresh();
+    try {
+      await api.dirCreate(name.replace(/\/+$/, ""));
+      await app.refresh();
+    } catch (e) {
+      app.notify(String(e), "error");
+    }
   }
 
   async function rename(node: TreeNode) {
-    const to = prompt("Rename or move to", node.path);
-    if (!to || to === node.path) return;
+    const to = await dialog.prompt({
+      title: node.isDir ? "Rename folder" : "Rename note",
+      label: "New name; change the folder part to move it",
+      value: node.path,
+      confirm: "Rename",
+      selectName: !node.isDir,
+      validate: (v) => checkPath(v) ?? (v.trim() === node.path ? "That's the current name" : null),
+      preview: (v) => (node.isDir ? null : "Links to it in other notes are updated"),
+    });
+    if (!to) return;
     try {
       const n = await api.noteRename(node.path, to);
       await app.refresh();
@@ -73,9 +101,19 @@
   }
 
   async function trash(node: TreeNode) {
-    if (!confirm(`Move ${node.path} to the vault trash (.vault/trash)?`)) return;
-    await api.noteTrash(node.path);
-    await app.refresh();
+    const ok = await dialog.confirm({
+      title: `Delete ${node.path.split("/").pop()}?`,
+      body: `${node.path} moves to the vault trash (.vault/trash). You can restore it from there.`,
+      confirm: "Move to trash",
+      danger: true,
+    });
+    if (!ok) return;
+    try {
+      await api.noteTrash(node.path);
+      await app.refresh();
+    } catch (e) {
+      app.notify(String(e), "error");
+    }
   }
 
   const people = $derived(
@@ -108,7 +146,7 @@
     <header>
       <h2 title={app.vault?.path}>{app.vault?.name}</h2>
       <button class="icon" title="New note" aria-label="New note" onclick={() => newNote()}><FilePlus size={16} /></button>
-      <button class="icon" title="New folder" aria-label="New folder" onclick={newFolder}><FolderPlus size={16} /></button>
+      <button class="icon" title="New folder" aria-label="New folder" onclick={() => newFolder()}><FolderPlus size={16} /></button>
       <button class="icon" title="Reload" aria-label="Reload" onclick={() => app.refresh()}><RefreshCw size={15} /></button>
     </header>
     <div class="scroll">
@@ -174,6 +212,7 @@
   <div class="menu" style="left: {menu.x}px; top: {menu.y}px" role="menu">
     {#if menu.node.isDir}
       <button role="menuitem" onclick={() => newNote(menu!.node.path)}>New note here</button>
+      <button role="menuitem" onclick={() => newFolder(menu!.node.path)}>New folder here</button>
     {/if}
     <button role="menuitem" onclick={() => rename(menu!.node)}>Rename or move</button>
     <button role="menuitem" class="danger" onclick={() => trash(menu!.node)}>Move to trash</button>

@@ -3,6 +3,7 @@
   import { app, noteTitle } from "$lib/app.svelte";
   import { chat } from "$lib/chat.svelte";
   import { ACTIONS } from "$lib/actions";
+  import { checkPath, dialog, withMd } from "$lib/dialog.svelte";
 
   type Item = { label: string; hint?: string; run: () => unknown };
 
@@ -32,21 +33,42 @@
     { label: "Toggle agent panel", hint: "Ctrl+J", run: () => (app.agentOpen = !app.agentOpen) },
     ...ACTIONS.filter((a) => !a.needsFile || openNote).map((a) => ({
       label: `Agent: ${a.label}`,
-      run: () => {
+      run: async () => {
         if (a.needsPerson) {
-          const person = openNote?.startsWith("people/") ? openNote.replace(/\.md$/, "") : prompt("Person note, e.g. people/alex");
-          if (person) chat.ask(a.prompt({ person }), [`${person}.md`], a.label);
+          const person = openNote?.startsWith("people/")
+            ? openNote.replace(/\.md$/, "")
+            : await dialog.prompt({
+                title: a.label,
+                label: "Person note",
+                value: "people/",
+                placeholder: "people/alex",
+                confirm: "Continue",
+                validate: (v) =>
+                  checkPath(v) ?? (app.notes.includes(withMd(v)) ? null : `No note at ${withMd(v)}`),
+              });
+          if (person) chat.ask(a.prompt({ person: person.replace(/\.md$/, "") }), [withMd(person)], a.label);
         } else chat.ask(a.prompt({ file: openNote ?? undefined }), a.needsFile && openNote ? [openNote] : [], a.label);
       },
     })),
     ...templates.map((t) => ({
       label: `New note from template: ${t}`,
       run: async () => {
-        const name = prompt(`Path for the new ${t} note`, t === "person" ? "people/" : t === "one-on-one" ? `people/` : "");
+        const name = await dialog.prompt({
+          title: `New ${t} note`,
+          label: "Name or path in the vault",
+          value: t === "person" || t === "one-on-one" ? "people/" : "",
+          confirm: "Create",
+          validate: checkPath,
+          preview: (v) => `Creates ${withMd(v)} from templates/${t}.md`,
+        });
         if (!name) return;
-        const path = await api.noteCreate(name.endsWith(".md") ? name : `${name}.md`, t);
-        await app.refresh();
-        app.openNote(path);
+        try {
+          const path = await api.noteCreate(withMd(name), t);
+          await app.refresh();
+          app.openNote(path);
+        } catch (e) {
+          app.notify(String(e), "error");
+        }
       },
     })),
   ]);

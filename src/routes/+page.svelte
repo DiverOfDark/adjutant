@@ -8,6 +8,7 @@
   import ChatPanel from "$lib/components/ChatPanel.svelte";
   import StatusBar from "$lib/components/StatusBar.svelte";
   import CommandPalette from "$lib/components/CommandPalette.svelte";
+  import Dialog from "$lib/components/Dialog.svelte";
   import TodayView from "$lib/views/TodayView.svelte";
   import NoteView from "$lib/views/NoteView.svelte";
   import TasksView from "$lib/views/TasksView.svelte";
@@ -123,6 +124,8 @@
   </div>
   <CommandPalette />
 {/if}
+
+<Dialog />
 
 {#if app.toast}
   {@const toast = app.toast}
