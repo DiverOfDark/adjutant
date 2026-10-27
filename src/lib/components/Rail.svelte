@@ -17,7 +17,7 @@
 </script>
 
 <nav class="rail" aria-label="Main">
-  <div class="mark" aria-hidden="true">A</div>
+  <img class="mark" src="/icon.svg" alt="" aria-hidden="true" />
   <div class="group">
     {#each viewItems as item}
       <button
@@ -66,17 +66,9 @@
     border-right: 1px solid var(--rule);
   }
   .mark {
-    width: 30px;
-    height: 30px;
-    display: grid;
-    place-items: center;
-    border-radius: 9px;
-    background: var(--ink);
-    color: var(--paper);
-    font-weight: 800;
-    font-size: 1rem;
-    letter-spacing: -0.03em;
-    margin-bottom: 0.6rem;
+    width: 34px;
+    height: 34px;
+    margin-bottom: 0.5rem;
   }
   .group {
     display: flex;

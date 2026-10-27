@@ -99,7 +99,7 @@
 {:else if !app.vault}
   <main class="welcome">
     <div class="card">
-      <div class="mark">A</div>
+      <img class="mark" src="/icon.svg" alt="" />
       <h1>Adjutant</h1>
       <p>Pick a folder of Markdown notes, or an empty folder to start one. Your notes stay plain files on this machine.</p>
       <button class="primary big" onclick={pick}>Choose a folder</button>
@@ -154,16 +154,9 @@
     max-width: 30rem;
   }
   .mark {
-    width: 52px;
-    height: 52px;
-    border-radius: 15px;
-    display: grid;
-    place-items: center;
-    background: var(--ink);
-    color: var(--paper);
-    font-weight: 800;
-    font-size: 1.7rem;
-    letter-spacing: -0.04em;
+    width: 72px;
+    height: 72px;
+    margin-left: -6px;
   }
   .welcome h1 {
     font-size: var(--step-4);
