@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { api, type AppSettings, type Discovery, type JiraSettings } from "$lib/api";
+  import { api, onHotkeyChanged, type AppSettings, type Discovery, type JiraSettings } from "$lib/api";
+  import ShortcutInfo from "$lib/components/ShortcutInfo.svelte";
   import { app } from "$lib/app.svelte";
   import { updater } from "$lib/updater.svelte";
 
@@ -21,6 +22,15 @@
     if (!queries.length) queries = [{ name: "mine", jql: "assignee = currentUser() AND resolution = Unresolved ORDER BY updated DESC" }];
     settings = s;
     discovery = d;
+  });
+
+  // The desktop can rebind the shortcut at any time (Wayland portal).
+  onMount(() => {
+    const un = onHotkeyChanged(async () => {
+      const fresh = await api.appSettings();
+      if (settings) Object.assign(settings, { hotkeyLabel: fresh.hotkeyLabel, hotkeyManaged: fresh.hotkeyManaged, hotkeyError: fresh.hotkeyError });
+    });
+    return () => un.then((f) => f());
   });
 
   async function saveJira(test: boolean) {
@@ -49,8 +59,13 @@
   }
 
   async function saveApp() {
-    if (settings) await api.appSaveSettings($state.snapshot(settings));
-    app.notify("Saved");
+    try {
+      if (settings) await api.appSaveSettings($state.snapshot(settings));
+      app.notify("Saved");
+    } catch (e) {
+      app.notify(String(e), "error");
+    }
+    settings = await api.appSettings();
   }
 </script>
 
@@ -110,8 +125,15 @@
         <label class="check"><input type="checkbox" bind:checked={settings.autostart} /> Start Adjutant when I log in</label>
         <label class="check"><input type="checkbox" bind:checked={settings.closeToTray} /> Closing the window keeps Adjutant running in the tray</label>
         <label class="check"><input type="checkbox" bind:checked={settings.checkUpdates} /> Check GitHub for updates</label>
-        <label>Quick capture shortcut <input bind:value={settings.captureHotkey} placeholder="CommandOrControl+Shift+Space" /></label>
-        {#if settings.hotkeyError}<p class="status bad">{settings.hotkeyError}</p>{/if}
+        {#if settings.hotkeyManaged}
+          <div class="field">
+            <span>Quick capture shortcut</span>
+            <ShortcutInfo label={settings.hotkeyLabel} managed error={null} />
+          </div>
+        {:else}
+          <label>Quick capture shortcut <input bind:value={settings.captureHotkey} placeholder="CommandOrControl+Shift+Space" /></label>
+          {#if settings.hotkeyError}<p class="status bad">{settings.hotkeyError}</p>{/if}
+        {/if}
         <div class="btns"><button class="primary" onclick={saveApp}>Save</button></div>
       </div>
     </section>
@@ -193,6 +215,18 @@
     display: flex;
     flex-direction: column;
     gap: 0.9rem;
+  }
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+  .field > span {
+    font-size: 0.8rem;
+    font-weight: 700;
+  }
+  .field :global(p) {
+    margin: 0;
   }
   label {
     display: flex;

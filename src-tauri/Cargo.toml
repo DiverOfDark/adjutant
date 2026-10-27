@@ -42,3 +42,7 @@ chrono = { workspace = true }
 dunce = { workspace = true }
 regex = { workspace = true }
 
+[target.'cfg(target_os = "linux")'.dependencies]
+# Quick-capture shortcut on Wayland (GlobalShortcuts portal).
+ashpd = { version = "0.13", default-features = false, features = ["tokio", "global_shortcuts"] }
+futures-util = "0.3"

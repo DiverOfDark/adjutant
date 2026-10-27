@@ -156,6 +156,8 @@ export interface SetupStatus {
   wayland: boolean;
   captureCommand: string;
   hotkeyError: string | null;
+  hotkeyLabel: string | null;
+  hotkeyManaged: boolean;
   done: boolean;
 }
 
@@ -285,6 +287,8 @@ export interface AppSettings {
   closeToTray: boolean;
   checkUpdates: boolean;
   hotkeyError?: string | null;
+  hotkeyLabel?: string | null;
+  hotkeyManaged?: boolean;
 }
 
 export const api = {
@@ -344,6 +348,7 @@ export const api = {
   appSettings: () => call<AppSettings>("app_settings"),
   appSaveSettings: (settings: AppSettings) => call<void>("app_save_settings", { settings }),
   captureHide: () => call<void>("capture_hide"),
+  captureShortcutConfigure: () => call<void>("capture_shortcut_configure"),
   // setup
   setupStatus: () => call<SetupStatus>("setup_status"),
   setupInstallTools: () => call<void>("setup_install_tools"),
@@ -358,6 +363,7 @@ export const api = {
 export const onAgentEvent = (cb: (e: AgentEvent) => void) => listenTo<AgentEvent>("agent-event", cb);
 export const onVaultChanged = (cb: (paths: string[]) => void) => listenTo<string[]>("vault-changed", cb);
 export const onJiraSynced = (cb: (c: JiraCache) => void) => listenTo<JiraCache>("jira-synced", cb);
+export const onHotkeyChanged = (cb: () => void) => listenTo<null>("hotkey-changed", cb);
 export const onSetupLog = (cb: (line: string) => void) => listenTo<string>("setup-log", cb);
 export const onScheduleRun = (cb: (r: { id: string; record: RunRecord }) => void) =>
   listenTo<{ id: string; record: RunRecord }>("schedule-run", cb);

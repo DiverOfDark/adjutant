@@ -56,11 +56,19 @@ walks through the rest:
 
 You can run it again from Settings.
 
-## Quick capture on Wayland
+## Quick capture shortcut
 
-GNOME and KDE on Wayland don't let apps register global shortcuts. Add a
-custom shortcut in your system settings (GNOME: Settings → Keyboard →
-Custom Shortcuts) that runs the command setup shows, for example:
+**Ctrl+Shift+Space** (Cmd+Shift+Space on macOS) opens quick capture from
+anywhere. The tray menu shows the current shortcut.
+
+On Wayland, apps can't grab keys themselves. Adjutant asks the desktop
+through its global-shortcuts portal (KDE Plasma 6, GNOME 48+), which shows a
+dialog the first time: accept it. Change the key later in your system's
+shortcut settings, or from Settings → *Change it…*. To do this, Adjutant adds
+a hidden `dev.adjutant.app.desktop` entry to `~/.local/share/applications`.
+
+On desktops without that portal, add a custom shortcut in your system
+settings that runs the command setup shows, for example:
 
 ```sh
 "$HOME/Apps/Adjutant.AppImage" --capture

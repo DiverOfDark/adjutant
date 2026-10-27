@@ -3,7 +3,7 @@
 
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent};
+use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent, Wry};
 use tauri_plugin_autostart::ManagerExt as _;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
@@ -11,10 +11,62 @@ use crate::state::{CmdResult, err};
 
 pub const CAPTURE: &str = "capture";
 
-static HOTKEY_ERROR: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+/// The quick-capture shortcut as registered: what triggers it, or why it isn't.
+#[derive(Default)]
+struct Hotkey {
+    label: Option<String>,
+    error: Option<String>,
+}
+
+static HOTKEY: std::sync::Mutex<Hotkey> = std::sync::Mutex::new(Hotkey {
+    label: None,
+    error: None,
+});
+
+/// The tray's "Quick capture" item, relabelled with the current shortcut.
+struct TrayCapture(MenuItem<Wry>);
 
 pub fn hotkey_error() -> Option<String> {
-    HOTKEY_ERROR.lock().unwrap().clone()
+    HOTKEY.lock().unwrap().error.clone()
+}
+
+/// The shortcut as the user would press it, e.g. "Ctrl+Shift+Space".
+pub fn hotkey_label() -> Option<String> {
+    HOTKEY.lock().unwrap().label.clone()
+}
+
+/// True when the desktop owns the binding (the Wayland portal), so the
+/// shortcut is changed in system settings rather than here.
+pub fn hotkey_managed_by_desktop() -> bool {
+    is_wayland() && hotkey_error().is_none()
+}
+
+pub fn set_hotkey(app: &AppHandle, label: Option<String>, error: Option<String>) {
+    let text = match &label {
+        Some(l) => format!("Quick capture ({l})"),
+        None => "Quick capture".into(),
+    };
+    *HOTKEY.lock().unwrap() = Hotkey { label, error };
+    if let Some(item) = app.try_state::<TrayCapture>() {
+        let _ = item.0.set_text(text);
+    }
+    let _ = app.emit("hotkey-changed", ());
+}
+
+/// "CommandOrControl+Shift+Space" -> "Ctrl+Shift+Space" (or "Cmd+Shift+Space").
+fn pretty_hotkey(hotkey: &str) -> String {
+    hotkey
+        .split('+')
+        .map(str::trim)
+        .map(|p| match p.to_ascii_lowercase().as_str() {
+            "commandorcontrol" | "cmdorctrl" if cfg!(target_os = "macos") => "Cmd",
+            "commandorcontrol" | "cmdorctrl" | "control" => "Ctrl",
+            "command" => "Cmd",
+            "option" => "Alt",
+            _ => p,
+        })
+        .collect::<Vec<_>>()
+        .join("+")
 }
 
 /// Wayland compositors don't allow apps to grab global shortcuts; users bind
@@ -92,6 +144,7 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
         app,
         &[&open, &capture, &PredefinedMenuItem::separator(app)?, &quit],
     )?;
+    app.manage(TrayCapture(capture));
     let mut tray = TrayIconBuilder::with_id("main")
         .tooltip("Adjutant")
         .menu(&menu)
@@ -157,8 +210,14 @@ pub fn toggle_capture(app: &AppHandle) {
 pub fn register_capture_hotkey(app: &AppHandle, hotkey: &str) -> CmdResult<()> {
     let gs = app.global_shortcut();
     let _ = gs.unregister_all();
-    *HOTKEY_ERROR.lock().unwrap() = None;
+    if is_wayland() {
+        // Apps can't grab keys on Wayland; the desktop's portal binds it.
+        #[cfg(target_os = "linux")]
+        crate::portal_shortcut::start(app, hotkey);
+        return Ok(());
+    }
     if hotkey.trim().is_empty() {
+        set_hotkey(app, None, None);
         return Ok(());
     }
     let result = gs
@@ -168,17 +227,20 @@ pub fn register_capture_hotkey(app: &AppHandle, hotkey: &str) -> CmdResult<()> {
             }
         })
         .map_err(|e| format!("could not register {hotkey}: {e}"));
-    let result = match result {
-        Ok(()) if is_wayland() => Err(format!(
-            "Wayland doesn't let apps register global shortcuts. Add a system shortcut that runs {}",
-            capture_command()
-        )),
-        other => other,
-    };
-    if let Err(e) = &result {
-        *HOTKEY_ERROR.lock().unwrap() = Some(e.clone());
+    match &result {
+        Ok(()) => set_hotkey(app, Some(pretty_hotkey(hotkey)), None),
+        Err(e) => set_hotkey(app, None, Some(e.clone())),
     }
     result
+}
+
+/// Opens the desktop's shortcut editor for quick capture (Wayland portal).
+#[tauri::command]
+pub fn capture_shortcut_configure() -> CmdResult<()> {
+    #[cfg(target_os = "linux")]
+    return crate::portal_shortcut::configure();
+    #[cfg(not(target_os = "linux"))]
+    Err("only on Wayland".into())
 }
 
 pub fn apply_autostart(app: &AppHandle, enabled: bool) {

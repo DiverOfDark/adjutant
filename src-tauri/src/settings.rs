@@ -66,6 +66,12 @@ pub struct AppSettingsView {
     /// Set when the global shortcut could not be registered (e.g. Wayland).
     #[serde(default, skip_deserializing)]
     pub hotkey_error: Option<String>,
+    /// The shortcut as registered, e.g. "Ctrl+Shift+Space".
+    #[serde(default, skip_deserializing)]
+    pub hotkey_label: Option<String>,
+    /// The desktop owns the binding (Wayland); change it there.
+    #[serde(default, skip_deserializing)]
+    pub hotkey_managed: bool,
 }
 
 #[tauri::command]
@@ -77,6 +83,8 @@ pub fn app_settings(app: AppHandle) -> AppSettingsView {
         close_to_tray: s.close_to_tray,
         check_updates: s.check_updates,
         hotkey_error: crate::desktop::hotkey_error(),
+        hotkey_label: crate::desktop::hotkey_label(),
+        hotkey_managed: crate::desktop::hotkey_managed_by_desktop(),
     }
 }
 

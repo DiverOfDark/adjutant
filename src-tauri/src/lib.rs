@@ -2,6 +2,8 @@ mod agent;
 mod audit;
 mod desktop;
 mod jira;
+#[cfg(target_os = "linux")]
+mod portal_shortcut;
 mod schedules;
 mod settings;
 mod setup;
@@ -96,6 +98,7 @@ pub fn run() {
             settings::app_settings,
             settings::app_save_settings,
             desktop::capture_hide,
+            desktop::capture_shortcut_configure,
             setup::setup_status,
             setup::setup_install_tools,
             setup::setup_git_init,

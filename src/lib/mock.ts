@@ -288,7 +288,7 @@ export async function mockInvoke<T>(cmd: string, a: Record<string, any>): Promis
       os: "linux", initialized: true, gitAvailable: true, gitRepo: false, miseVersion: null, missingTools: [],
       discovery: { agents: [], defaultAgent: null, miseBin: null, miseError: "mise not found. Install it from https://mise.jdx.dev", miseUntrusted: false },
       hiddenFolders: [], agentSchedules: [{ id: "weekly-report", name: "Weekly report", enabled: false }, { id: "end-of-day", name: "End-of-day log", enabled: false }, { id: "morning-plan", name: "Morning plan", enabled: false }],
-      jiraConfigured: false, autostart: false, checkUpdates: true, wayland: true, captureCommand: '"/home/me/Apps/Adjutant.AppImage" --capture', hotkeyError: "Wayland doesn't let apps register global shortcuts.", done: false,
+      jiraConfigured: false, autostart: false, checkUpdates: true, wayland: true, captureCommand: '"/home/me/Apps/Adjutant.AppImage" --capture', hotkeyError: null, hotkeyLabel: "Ctrl+Shift+Space", hotkeyManaged: true, done: false,
     });
     case "chat_new_session": return r(`s${++mockSession}`);
     case "chat_prompt": await fakeTurn(a.sessionId, a.parts[0]?.text ?? ""); return r("end_turn");
@@ -307,7 +307,8 @@ export async function mockInvoke<T>(cmd: string, a: Record<string, any>): Promis
     case "jira_test": return r("Demo User");
     case "schedules_list": return r(schedules);
     case "schedule_toggle": { const s = schedules.find((s) => s.id === a.id); if (s) s.enabled = a.enabled; return r(undefined); }
-    case "app_settings": return r({ autostart: true, captureHotkey: "CommandOrControl+Shift+Space", closeToTray: true, checkUpdates: true, hotkeyError: null });
+    case "app_settings": return r({ autostart: true, captureHotkey: "CommandOrControl+Shift+Space", closeToTray: true, checkUpdates: true, hotkeyError: null, hotkeyLabel: "Ctrl+Shift+Space", hotkeyManaged: true });
+    case "capture_shortcut_configure": return r(undefined);
     default: return r(undefined);
   }
 }

@@ -40,6 +40,8 @@ pub struct SetupStatus {
     wayland: bool,
     capture_command: String,
     hotkey_error: Option<String>,
+    hotkey_label: Option<String>,
+    hotkey_managed: bool,
     done: bool,
 }
 
@@ -90,6 +92,8 @@ pub async fn setup_status(app: AppHandle, state: State<'_, AppState>) -> CmdResu
     let v = state.vault()?;
     let settings = crate::settings::load(&app);
     let hotkey_error = crate::desktop::hotkey_error();
+    let hotkey_label = crate::desktop::hotkey_label();
+    let hotkey_managed = crate::desktop::hotkey_managed_by_desktop();
     blocking(move || {
         let cfg = VaultConfig::load(&v)?;
         let discovery = agents::discover(&v, &cfg);
@@ -125,6 +129,8 @@ pub async fn setup_status(app: AppHandle, state: State<'_, AppState>) -> CmdResu
             wayland: crate::desktop::is_wayland(),
             capture_command: crate::desktop::capture_command(),
             hotkey_error,
+            hotkey_label,
+            hotkey_managed,
             done: settings.setup_done.iter().any(|p| p == &v),
             discovery,
         })

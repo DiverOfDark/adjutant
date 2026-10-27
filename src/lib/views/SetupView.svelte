@@ -1,7 +1,8 @@
 <script lang="ts">
   import { onMount, tick } from "svelte";
   import { Check, Copy } from "@lucide/svelte";
-  import { api, onSetupLog, type SetupStatus } from "$lib/api";
+  import { api, onHotkeyChanged, onSetupLog, type SetupStatus } from "$lib/api";
+  import ShortcutInfo from "$lib/components/ShortcutInfo.svelte";
   import { app } from "$lib/app.svelte";
   import { chat } from "$lib/chat.svelte";
 
@@ -27,7 +28,11 @@
       await tick();
       logBox?.scrollTo({ top: logBox.scrollHeight });
     });
-    return () => un.then((f) => f());
+    const unHotkey = onHotkeyChanged(refresh);
+    return () => {
+      un.then((f) => f());
+      unHotkey.then((f) => f());
+    };
   });
 
   async function step(name: string, fn: () => Promise<unknown>) {
@@ -186,12 +191,7 @@
         {/each}
         <div class="capture">
           <strong>Quick capture</strong>
-          {#if s.wayland || s.hotkeyError}
-            <p>{s.wayland ? "On Wayland, apps can't register global shortcuts." : s.hotkeyError} Add a keyboard shortcut in your system settings that runs:</p>
-            <div class="cmd"><code>{s.captureCommand}</code><button class="icon" aria-label="Copy" onclick={() => copy(s!.captureCommand)}><Copy size={14} /></button></div>
-          {:else}
-            <p>Press <kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>Space</kbd> anywhere to add a task or a note.</p>
-          {/if}
+          <ShortcutInfo label={s.hotkeyLabel} managed={s.hotkeyManaged} error={s.hotkeyError} captureCommand={s.captureCommand} />
         </div>
       </li>
 
@@ -344,7 +344,7 @@
   .capture {
     margin-top: 0.8rem;
   }
-  .capture p {
+  .capture :global(p) {
     margin-top: 0.2rem;
   }
   footer {
