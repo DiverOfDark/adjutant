@@ -1,0 +1,23 @@
+[package]
+name = "adjutant-core"
+description = "Adjutant's deterministic core: vault, tasks, search, agent discovery, Jira sync, scheduler."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+toml = { workspace = true }
+toml_edit = "0.23"
+chrono = { workspace = true }
+regex = { workspace = true }
+dunce = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3"

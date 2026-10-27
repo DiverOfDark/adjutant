@@ -1,0 +1,11 @@
+# Development toolchain for Adjutant itself (not the vault's agent tools).
+[tools]
+node = "24"
+
+[tasks.dev]
+description = "Run the app against the demo vault"
+env = { ADJUTANT_VAULT = "{{config_root}}/examples/demo-vault" }
+run = "npm run tauri dev"
+
+[tasks.test]
+run = ["cargo test --workspace --exclude adjutant", "npm run check"]

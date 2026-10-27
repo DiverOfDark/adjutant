@@ -1,0 +1,4 @@
+# Adjutant vault configuration.
+
+[agent]
+default = "claude-agent-acp"
