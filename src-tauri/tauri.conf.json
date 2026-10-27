@@ -27,12 +27,12 @@
   "bundle": {
     "active": true,
     "targets": [
+      "appimage",
       "deb",
       "rpm",
-      "appimage",
-      "dmg",
+      "nsis",
       "app",
-      "nsis"
+      "dmg"
     ],
     "icon": [
       "icons/32x32.png",
@@ -42,6 +42,15 @@
       "icons/icon.ico"
     ],
     "category": "Productivity",
-    "shortDescription": "Agentic Markdown knowledge base for managers"
+    "shortDescription": "Agentic Markdown knowledge base for managers",
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDlBNUU3QTYzQkFCRjAxRUQKUldUdEFiKzZZM3BlbWx1NlRVcmFiN0ppKzF5eVN1ZTA0NXZzZ3ZKSmtyTDZEV0x0eFBQcjFMVEcK",
+      "endpoints": [
+        "https://github.com/DiverOfDark/adjutant/releases/latest/download/latest.json"
+      ]
+    }
   }
 }

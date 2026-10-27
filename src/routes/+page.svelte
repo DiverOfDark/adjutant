@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { api, inTauri, onJiraSynced, onScheduleRun, onVaultChanged } from "$lib/api";
   import { app } from "$lib/app.svelte";
+  import { updater } from "$lib/updater.svelte";
   import Rail from "$lib/components/Rail.svelte";
   import Sidebar from "$lib/components/Sidebar.svelte";
   import ChatPanel from "$lib/components/ChatPanel.svelte";
@@ -65,6 +66,7 @@
   }
 
   onMount(() => {
+    updater.start();
     (async () => {
       const last = await api.vaultLast();
       if (last) await open(last);

@@ -28,6 +28,8 @@ tauri-plugin-global-shortcut = "2"
 tauri-plugin-autostart = "2"
 tauri-plugin-notification = "2"
 tauri-plugin-single-instance = "2"
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
 notify = "8"
 notify-debouncer-full = "0.7"
 anyhow = { workspace = true }

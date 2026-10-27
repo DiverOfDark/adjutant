@@ -1,49 +1,95 @@
-name: Release
+name: release
 
+# Every push to main is one version. The release, which the app's updater
+# reads, is published only once every platform's bundle is attached.
 on:
   push:
-    tags: ["v*"]
+    branches: [main]
   workflow_dispatch:
 
-permissions:
-  contents: write
+concurrency:
+  group: release
+  cancel-in-progress: true
+
+env:
+  # The updater compares versions, so every run needs a higher one than the last.
+  VERSION: 0.1.${{ github.run_number }}
 
 jobs:
-  build:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      id: ${{ steps.create.outputs.id }}
+    steps:
+      # A cancelled run leaves its draft behind, and only one run is ever in flight.
+      - id: create
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release list --repo "$GITHUB_REPOSITORY" --json tagName,isDraft --jq '.[] | select(.isDraft) | .tagName' \
+            | xargs -r -n1 gh release delete --repo "$GITHUB_REPOSITORY" --yes
+          # Created through the API for its id: a release list does not show a draft made a moment ago.
+          id=$(gh api "repos/$GITHUB_REPOSITORY/releases" -f tag_name="v$VERSION" -f target_commitish="$GITHUB_SHA" \
+            -f name="Adjutant $VERSION" -f body="Built from $GITHUB_SHA." \
+            -F draft=true --jq .id)
+          test -n "$id"
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+
+  bundle:
+    needs: release
     strategy:
       fail-fast: false
       matrix:
         include:
-          - platform: ubuntu-22.04
-            args: ""
-          - platform: macos-latest
-            args: "--target universal-apple-darwin"
-          - platform: windows-latest
-            args: ""
-    runs-on: ${{ matrix.platform }}
+          - os: ubuntu-22.04
+          - os: windows-latest
+          - os: macos-latest
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
     steps:
-      - uses: actions/checkout@v7
-      - name: Linux dependencies
-        if: runner.os == 'Linux'
+      - uses: actions/checkout@v4
+
+      - if: matrix.os == 'ubuntu-22.04'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libxdo-dev
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ runner.os == 'macOS' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
-      - uses: Swatinem/rust-cache@v2
-      - uses: actions/setup-node@v7
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libxdo-dev libdbus-1-dev
+
+      - uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+
       - run: npm ci
-      # Unsigned builds for now; signing comes later.
-      - uses: tauri-apps/tauri-action@action-v1.0.0
+
+      - name: Stamp the version
+        shell: bash
+        run: |
+          node -e 'const fs=require("fs"),f="src-tauri/tauri.conf.json",c=JSON.parse(fs.readFileSync(f));c.version=process.env.VERSION;fs.writeFileSync(f,JSON.stringify(c,null,2))'
+
+      # Each platform adds itself to the release's latest.json, which the app's updater reads.
+      - uses: tauri-apps/tauri-action@v0
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: Adjutant ${{ github.ref_name }}
-          releaseDraft: true
-          prerelease: true
-          args: ${{ matrix.args }}
+          releaseId: ${{ needs.release.outputs.id }}
+
+  publish:
+    needs: [release, bundle]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          ID: ${{ needs.release.outputs.id }}
+        run: |
+          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/$ID" --jq '.assets | length')" -gt 0
+          gh api -X PATCH "repos/$GITHUB_REPOSITORY/releases/$ID" -F draft=false -f make_latest=true --jq .html_url

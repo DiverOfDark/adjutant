@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { api, type AppSettings, type Discovery, type JiraSettings } from "$lib/api";
   import { app } from "$lib/app.svelte";
+  import { updater } from "$lib/updater.svelte";
 
   let jira = $state<JiraSettings>({ baseUrl: "", email: "", queries: {}, hasToken: false });
   let token = $state("");
@@ -94,6 +95,18 @@
         <p>Scheduled jobs only run while Adjutant is open, so keep it in the tray and start it on login.</p>
       </div>
       <div class="form">
+        <div class="version">
+          <span>Adjutant {updater.version ?? "dev"}</span>
+          {#if updater.available?.ready}
+            <span class="hint">{updater.available.version} is downloaded and installs when you quit from the tray.</span>
+            <button class="primary" onclick={() => updater.installNow()}>Restart to update</button>
+          {:else if updater.available}
+            <span class="hint">Downloading {updater.available.version}…</span>
+          {:else}
+            <span class="hint">{updater.note || "Updates come from GitHub releases."}</span>
+            <button onclick={() => updater.check()}>Check now</button>
+          {/if}
+        </div>
         <label class="check"><input type="checkbox" bind:checked={settings.autostart} /> Start Adjutant when I log in</label>
         <label class="check"><input type="checkbox" bind:checked={settings.closeToTray} /> Closing the window keeps Adjutant running in the tray</label>
         <label>Quick capture shortcut <input bind:value={settings.captureHotkey} placeholder="CommandOrControl+Shift+Space" /></label>
@@ -235,6 +248,16 @@
     margin: 0;
     font-size: 0.8rem;
     color: var(--muted);
+  }
+  .version {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem 0.8rem;
+    font-weight: 700;
+  }
+  .version .hint {
+    flex-basis: 100%;
   }
   .btns {
     display: flex;

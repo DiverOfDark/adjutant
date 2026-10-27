@@ -35,7 +35,16 @@ without spending agent credits.
 - **Safe by default.** File access is sandboxed to the vault, tool calls need
   permission, and every agent action lands in `.vault/audit.log`.
 
-## Try it
+## Install
+
+Download the latest build for Linux (AppImage, deb, rpm), macOS (dmg) or
+Windows (exe) from [Releases](https://github.com/DiverOfDark/adjutant/releases/latest).
+Every push to `main` is a release (`0.1.<run>`); the app downloads updates in
+the background and installs them when you quit from the tray, or right away
+with *Restart to update* in Settings. On Linux, auto-update works for the
+AppImage.
+
+## Build from source
 
 Requirements: [mise](https://mise.jdx.dev), Rust (stable), and the
 [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for your OS.

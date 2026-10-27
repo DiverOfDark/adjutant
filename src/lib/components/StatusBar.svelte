@@ -1,6 +1,7 @@
 <script lang="ts">
   import { app, relTime } from "$lib/app.svelte";
   import { chat } from "$lib/chat.svelte";
+  import { updater } from "$lib/updater.svelte";
 
   let now = $state(Date.now());
   $effect(() => {
@@ -18,6 +19,9 @@
     <span class="led"></span>{chat.agentName ?? "No agent"}{chat.busy ? ", working" : ""}
   </span>
   <span class="spacer"></span>
+  {#if updater.available?.ready}
+    <button class="link update" title="Adjutant {updater.available.version} is downloaded" onclick={() => app.go({ kind: "settings" })}>Update ready</button>
+  {/if}
   {#if synced}<button class="link" onclick={() => app.go({ kind: "jira" })}>Jira synced {synced}</button>{/if}
   <span>{app.openTasks.length} open tasks</span>
   <span class="kbd"><kbd>Ctrl</kbd> <kbd>K</kbd> commands</span>
@@ -59,6 +63,10 @@
   }
   .link:hover {
     color: var(--ink);
+  }
+  .update {
+    color: var(--verdigris);
+    font-weight: 700;
   }
   kbd {
     font-size: 0.68rem;
