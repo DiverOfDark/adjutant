@@ -72,6 +72,7 @@ pub fn run() {
             tasks::tasks_list,
             tasks::task_complete,
             tasks::task_reopen,
+            tasks::task_undo_complete,
             tasks::task_add,
             tasks::task_move,
             tasks::capture_note,

@@ -256,9 +256,15 @@ export async function mockInvoke<T>(cmd: string, a: Record<string, any>): Promis
     case "tasks_list": return r(parseTasks());
     case "task_complete": {
       const lines = files[a.file].split("\n");
-      lines.splice(a.line, 1);
+      const before = lines.splice(a.line, 1);
       files[a.file] = lines.join("\n");
-      return r({ archivedTo: "tasks/done/2026-10.md" });
+      return r({ archivedTo: "tasks/done/2026-10.md", undo: { file: a.file, line: a.line, before, after: [], archivedTo: "tasks/done/2026-10.md" } });
+    }
+    case "task_undo_complete": {
+      const lines = files[a.undo.file].split("\n");
+      lines.splice(a.undo.line, 0, ...a.undo.before);
+      files[a.undo.file] = lines.join("\n");
+      return r(undefined);
     }
     case "task_add": {
       files["tasks.md"] = files["tasks.md"].replace(`## ${a.section}\n`, `## ${a.section}\n- [ ] ${a.text}\n`);

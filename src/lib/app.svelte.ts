@@ -1,5 +1,5 @@
 // App-wide state: the open vault, navigation, tasks and Jira data.
-import { api, type JiraCache, type Task, type TreeNode, type VaultInfo } from "./api";
+import { api, type CompleteUndo, type JiraCache, type Task, type TreeNode, type VaultInfo } from "./api";
 
 export type View =
   | { kind: "today" }
@@ -12,6 +12,21 @@ export type View =
 
 export type SidebarMode = "files" | "search" | "people";
 
+export interface ToastAction {
+  label: string;
+  run: () => void;
+}
+
+export interface Toast {
+  id: number;
+  text: string;
+  kind: "info" | "error";
+  action?: ToastAction;
+}
+
+let toastSeq = 0;
+let toastTimer: ReturnType<typeof setTimeout> | undefined;
+
 class AppState {
   vault = $state<VaultInfo | null>(null);
   tree = $state<TreeNode | null>(null);
@@ -23,7 +38,7 @@ class AppState {
   sidebar = $state<SidebarMode>("files");
   agentOpen = $state(true);
   paletteOpen = $state(false);
-  toast = $state<{ text: string; kind: "info" | "error" } | null>(null);
+  toast = $state<Toast | null>(null);
   /** Bumped when files change on disk, so open views can reload. */
   revision = $state(0);
 
@@ -86,24 +101,51 @@ class AppState {
     this.openNote(created);
   }
 
-  notify(text: string, kind: "info" | "error" = "info") {
-    this.toast = { text, kind };
-    setTimeout(() => {
-      if (this.toast?.text === text) this.toast = null;
-    }, kind === "error" ? 8000 : 3500);
+  notify(text: string, kind: "info" | "error" = "info", action?: ToastAction) {
+    this.toast = { id: ++toastSeq, text, kind, action };
+    this.releaseToast();
+  }
+
+  /** Keeps the toast up (while the pointer is on it). */
+  holdToast() {
+    clearTimeout(toastTimer);
+  }
+
+  /** (Re)starts the toast's dismiss timer. */
+  releaseToast() {
+    clearTimeout(toastTimer);
+    const t = this.toast;
+    if (!t) return;
+    toastTimer = setTimeout(() => {
+      if (this.toast?.id === t.id) this.toast = null;
+    }, t.action ? 10000 : t.kind === "error" ? 8000 : 3500);
   }
 
   async completeTask(task: Task) {
     try {
       const res = await api.taskComplete(task);
       this.tasks = this.tasks.filter((t) => !(t.file === task.file && t.line === task.line));
-      this.notify(res.archivedTo ? `Done. Moved to ${res.archivedTo}` : "Done");
+      this.notify(res.archivedTo ? `Done. Moved to ${res.archivedTo}` : "Done", "info", {
+        label: "Undo",
+        run: () => this.undoComplete(res.undo),
+      });
       await this.refreshTasks();
       this.revision++;
     } catch (e) {
       this.notify(String(e), "error");
       await this.refreshTasks();
     }
+  }
+
+  async undoComplete(undo: CompleteUndo) {
+    try {
+      await api.taskUndoComplete(undo);
+      this.notify("Task restored");
+    } catch (e) {
+      this.notify(`Couldn't undo: ${e}`, "error");
+    }
+    await this.refreshTasks();
+    this.revision++;
   }
 }
 

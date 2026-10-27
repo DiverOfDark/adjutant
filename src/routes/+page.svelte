@@ -125,7 +125,26 @@
 {/if}
 
 {#if app.toast}
-  <div class="toast" class:bad={app.toast.kind === "error"} role="status">{app.toast.text}</div>
+  {@const toast = app.toast}
+  <div
+    class="toast"
+    class:bad={toast.kind === "error"}
+    role="status"
+    onpointerenter={() => app.holdToast()}
+    onpointerleave={() => app.releaseToast()}
+  >
+    <span>{toast.text}</span>
+    {#if toast.action}
+      <button
+        class="toast-action"
+        onclick={() => {
+          const run = toast.action?.run;
+          app.toast = null;
+          run?.();
+        }}>{toast.action.label}</button
+      >
+    {/if}
+  </div>
 {/if}
 
 <style>
@@ -216,6 +235,23 @@
     font-size: 0.875rem;
     box-shadow: var(--shadow-pop);
     animation: rise 0.18s ease-out;
+    display: flex;
+    align-items: center;
+    gap: 0.9rem;
+  }
+  .toast-action {
+    flex: none;
+    padding: 0.15rem 0.55rem;
+    border: 1px solid color-mix(in srgb, var(--paper) 35%, transparent);
+    border-radius: var(--radius-s);
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .toast-action:hover {
+    background: color-mix(in srgb, var(--paper) 15%, transparent);
   }
   .toast.bad {
     background: var(--signal);

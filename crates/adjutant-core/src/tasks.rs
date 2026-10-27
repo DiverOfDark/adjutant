@@ -100,6 +100,21 @@ pub struct Task {
 pub struct CompleteOutcome {
     /// Vault-relative archive path, e.g. "tasks/done/2026-10.md"; `None` for in-place edits.
     pub archived_to: Option<String>,
+    /// Hand back to [`undo_complete`] to put the task back where it was.
+    pub undo: CompleteUndo,
+}
+
+/// What [`complete_task`] changed, so it can be reversed.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct CompleteUndo {
+    pub file: String,
+    pub line: usize,
+    /// The task's lines (with children) before it was completed.
+    pub before: Vec<String>,
+    /// The lines written in its place, or appended to the archive.
+    pub after: Vec<String>,
+    pub archived_to: Option<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -551,6 +566,7 @@ pub fn complete_task(
     let (path, mut doc, task) = load_checked(vault, file, line, expected_raw)?;
 
     if file == TASKS_FILE {
+        let before = doc.lines[line..block_end(&doc.lines, line)].to_vec();
         let mut block = take_block(&mut doc.lines, line);
         block[0] = done_line(&task.text, today);
         let month = today.format("%Y-%m").to_string();
@@ -558,7 +574,14 @@ pub fn complete_task(
         let rel = append_to_archive(vault, &month, &block)?;
         write_atomic(&path, &doc.render())?;
         return Ok(CompleteOutcome {
-            archived_to: Some(rel),
+            archived_to: Some(rel.clone()),
+            undo: CompleteUndo {
+                file: file.to_string(),
+                line,
+                before,
+                after: block,
+                archived_to: Some(rel),
+            },
         });
     }
 
@@ -578,9 +601,52 @@ pub fn complete_task(
             today.format("%Y-%m-%d")
         );
     }
-    doc.lines[line] = new_line;
+    doc.lines[line] = new_line.clone();
     write_atomic(&path, &doc.render())?;
-    Ok(CompleteOutcome { archived_to: None })
+    Ok(CompleteOutcome {
+        archived_to: None,
+        undo: CompleteUndo {
+            file: file.to_string(),
+            line,
+            before: vec![expected_raw.to_string()],
+            after: vec![new_line],
+            archived_to: None,
+        },
+    })
+}
+
+/// Reverse a [`complete_task`]: put the task back at its old line and drop
+/// it from the archive. Fails with [`TaskError::Changed`] if the completed
+/// lines were edited since.
+pub fn undo_complete(vault: &Path, undo: &CompleteUndo) -> anyhow::Result<()> {
+    let path = resolve(vault, &undo.file)?;
+    let Some(archive) = &undo.archived_to else {
+        let mut doc = Doc::read(&path)?;
+        if doc.lines.get(undo.line) != undo.after.first() {
+            return Err(TaskError::Changed.into());
+        }
+        doc.lines[undo.line] = undo.before[0].clone();
+        return write_atomic(&path, &doc.render());
+    };
+    let archive_path = resolve(vault, archive)?;
+    let mut done = Doc::read(&archive_path).map_err(|_| TaskError::Changed)?;
+    let n = undo.after.len();
+    let at = (0..=done.lines.len().saturating_sub(n))
+        .rev()
+        .find(|&i| n > 0 && done.lines.get(i..i + n) == Some(&undo.after[..]))
+        .ok_or(TaskError::Changed)?;
+    let mut doc = if path.exists() {
+        Doc::read(&path)?
+    } else {
+        Doc::parse("")
+    };
+    let line = undo.line.min(doc.lines.len());
+    doc.lines.splice(line..line, undo.before.iter().cloned());
+    doc.trailing = true;
+    // Restore first: a crash in between duplicates a task rather than losing it.
+    write_atomic(&path, &doc.render())?;
+    done.lines.drain(at..at + n);
+    write_atomic(&archive_path, &done.render())
 }
 
 /// Reopen a done task in place: "- [x]" -> "- [ ]", strip `@done(...)`.
@@ -905,6 +971,36 @@ mod tests {
                 .ends_with("  - [ ] child\n- [x] Other @done(2026-10-28)\n")
         );
         assert_eq!(read(&dir, "tasks.md"), "# Tasks\n\n## Now\n\n## Next\n");
+    }
+
+    #[test]
+    fn undo_complete_restores_tasks_md_and_archive() {
+        let md = "## Now\n- [ ] A\n  - [ ] child\n- [ ] B\n";
+        let archived = "# Done 2026-10\n\n- [x] Old @done(2026-10-01)\n";
+        let dir = vault_with(&[("tasks.md", md), ("tasks/done/2026-10.md", archived)]);
+        let out = complete_task(dir.path(), "tasks.md", 1, "- [ ] A", d("2026-10-27")).unwrap();
+        undo_complete(dir.path(), &out.undo).unwrap();
+        assert_eq!(read(&dir, "tasks.md"), md);
+        assert_eq!(read(&dir, "tasks/done/2026-10.md"), archived);
+        // A second undo finds nothing to take back.
+        assert!(undo_complete(dir.path(), &out.undo).is_err());
+    }
+
+    #[test]
+    fn undo_complete_in_place() {
+        let md = "# 1:1\n- [ ] ask about X\n";
+        let dir = vault_with(&[("people/alex.md", md)]);
+        let out = complete_task(
+            dir.path(),
+            "people/alex.md",
+            1,
+            "- [ ] ask about X",
+            d("2026-10-27"),
+        )
+        .unwrap();
+        assert_ne!(read(&dir, "people/alex.md"), md);
+        undo_complete(dir.path(), &out.undo).unwrap();
+        assert_eq!(read(&dir, "people/alex.md"), md);
     }
 
     #[test]

@@ -1,6 +1,6 @@
 //! Task commands. All deterministic: no agent involved.
 
-use adjutant_core::tasks::{self, CompleteOutcome, Task};
+use adjutant_core::tasks::{self, CompleteOutcome, CompleteUndo, Task};
 use tauri::State;
 
 use crate::state::{AppState, CmdResult, blocking};
@@ -30,6 +30,15 @@ pub async fn task_complete(
         serde_json::to_value(&out).unwrap_or_default(),
     );
     Ok(out)
+}
+
+#[tauri::command]
+pub async fn task_undo_complete(state: State<'_, AppState>, undo: CompleteUndo) -> CmdResult<()> {
+    let v = state.vault()?;
+    let audit = state.audit.clone();
+    blocking(move || tasks::undo_complete(&v, &undo)).await?;
+    audit.record_app("task-undo-complete", serde_json::Value::Null);
+    Ok(())
 }
 
 #[tauri::command]

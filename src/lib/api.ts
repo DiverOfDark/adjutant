@@ -74,6 +74,15 @@ export interface Visibility {
 
 // ---------- Tasks ----------
 
+/** Opaque: what task_complete changed, handed back to undo it. */
+export interface CompleteUndo {
+  file: string;
+  line: number;
+  before: string[];
+  after: string[];
+  archivedTo: string | null;
+}
+
 export interface Task {
   file: string;
   line: number;
@@ -298,7 +307,8 @@ export const api = {
   noteVisibility: (path: string) => call<Visibility>("note_visibility", { path }),
   // tasks
   tasksList: () => call<Task[]>("tasks_list"),
-  taskComplete: (t: Task) => call<{ archivedTo: string | null }>("task_complete", { file: t.file, line: t.line, raw: t.raw }),
+  taskComplete: (t: Task) => call<{ archivedTo: string | null; undo: CompleteUndo }>("task_complete", { file: t.file, line: t.line, raw: t.raw }),
+  taskUndoComplete: (undo: CompleteUndo) => call<void>("task_undo_complete", { undo }),
   taskReopen: (t: Task) => call<void>("task_reopen", { file: t.file, line: t.line, raw: t.raw }),
   taskAdd: (section: string, text: string) => call<void>("task_add", { section, text }),
   taskMove: (t: Task, section: string) => call<void>("task_move", { line: t.line, raw: t.raw, section }),
