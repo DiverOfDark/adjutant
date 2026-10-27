@@ -1,0 +1,17 @@
+# Tools the agent can use. Adjutant spawns agents as `mise exec -- <agent>`,
+# so the agent's PATH holds exactly what is pinned here. Run `mise install`
+# in this folder after editing.
+
+[tools]
+node = "24"
+
+# --- ACP agents (Adjutant lists the ones installed here in its agent picker) ---
+"npm:@jetbrains/junie-cli" = "latest"                       # JetBrains Junie: junie --acp=true
+# "npm:@agentclientprotocol/claude-agent-acp" = "latest"    # Claude Agent: claude-agent-acp
+# "npm:@google/gemini-cli" = "latest"                       # Gemini CLI: gemini --acp
+
+# --- CLIs the agent may call (documented in AGENTS.md) ---
+ripgrep = "latest"
+fd = "latest"
+jq = "latest"
+yq = "latest"

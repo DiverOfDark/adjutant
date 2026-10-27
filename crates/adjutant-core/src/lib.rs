@@ -4,3 +4,9 @@
 
 pub mod agents;
 pub mod config;
+pub mod jira;
+pub mod scheduler;
+pub mod search;
+pub mod secrets;
+pub mod tasks;
+pub mod vault;

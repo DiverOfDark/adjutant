@@ -9,6 +9,7 @@ use std::path::{Component, Path, PathBuf};
 #[derive(Debug, Clone)]
 pub struct Sandbox {
     roots: Vec<PathBuf>,
+    denied: Vec<PathBuf>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -17,6 +18,8 @@ pub enum SandboxError {
     NotAbsolute(PathBuf),
     #[error("path is outside the vault sandbox: {0}")]
     Outside(PathBuf),
+    #[error("this folder is hidden from agents (.vault/config.toml): {0}")]
+    Denied(PathBuf),
 }
 
 impl Sandbox {
@@ -26,7 +29,20 @@ impl Sandbox {
             .into_iter()
             .map(|r| dunce::canonicalize(&r).unwrap_or(r))
             .collect();
-        Self { roots }
+        Self {
+            roots,
+            denied: Vec::new(),
+        }
+    }
+
+    /// Paths under these folders are refused even inside a root
+    /// (folders marked `agent = "none"`).
+    pub fn with_denied(mut self, denied: impl IntoIterator<Item = PathBuf>) -> Self {
+        self.denied = denied
+            .into_iter()
+            .map(|r| dunce::canonicalize(&r).unwrap_or(r))
+            .collect();
+        self
     }
 
     pub fn roots(&self) -> &[PathBuf] {
@@ -42,6 +58,9 @@ impl Sandbox {
             return Err(SandboxError::NotAbsolute(path.to_path_buf()));
         }
         let resolved = resolve(path);
+        if self.denied.iter().any(|d| resolved.starts_with(d)) {
+            return Err(SandboxError::Denied(path.to_path_buf()));
+        }
         if self.roots.iter().any(|root| resolved.starts_with(root)) {
             Ok(resolved)
         } else {
@@ -105,6 +124,18 @@ mod tests {
         std::fs::create_dir(dir.path().join("vault")).unwrap();
         assert!(sb.check(&dir.path().join("vault/../secret")).is_err());
         assert!(sb.check(Path::new("relative.md")).is_err());
+    }
+
+    #[test]
+    fn rejects_denied_folders() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir(dir.path().join("people")).unwrap();
+        let sb = Sandbox::new([dir.path().to_path_buf()]).with_denied([dir.path().join("people")]);
+        assert!(matches!(
+            sb.check(&dir.path().join("people/alex.md")),
+            Err(SandboxError::Denied(_))
+        ));
+        assert!(sb.check(&dir.path().join("teams/x.md")).is_ok());
     }
 
     #[cfg(unix)]

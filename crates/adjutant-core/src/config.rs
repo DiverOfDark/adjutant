@@ -48,11 +48,21 @@ pub struct AgentOverride {
     pub secrets: BTreeMap<String, String>,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default)]
 pub struct Permissions {
     /// "Always allow" rules, written when the user picks "Always allow".
     pub always_allow: Vec<PermissionRule>,
+    /// Tool kinds scheduled (unattended) agent jobs may use without asking.
+    /// Everything else is rejected; the app writes job output itself.
+    #[serde(default = "default_job_allow")]
+    pub job_allow: Vec<String>,
+}
+
+fn default_job_allow() -> Vec<String> {
+    ["read", "search", "think", "fetch", "execute"]
+        .map(String::from)
+        .to_vec()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -60,6 +70,15 @@ pub struct PermissionRule {
     pub agent: String,
     /// ACP tool kind (`read`, `edit`, `execute`, ...) or `*`.
     pub tool: String,
+}
+
+impl Default for Permissions {
+    fn default() -> Self {
+        Self {
+            always_allow: Vec::new(),
+            job_allow: default_job_allow(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
@@ -105,7 +124,21 @@ pub enum JobConfig {
         prompt: String,
         /// Output file pattern relative to the vault, e.g. `reports/{week}.md`.
         output: Option<String>,
+        /// Whether a run replaces the output file or appends a dated section.
+        #[serde(default)]
+        output_mode: OutputMode,
     },
+}
+
+/// How a scheduled agent job writes its output file.
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum OutputMode {
+    /// Overwrite the file with the latest run's output.
+    #[default]
+    Replace,
+    /// Append a `## <date>` section to the file.
+    Append,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -172,6 +205,51 @@ impl VaultConfig {
         Ok(())
     }
 
+    /// Writes the `[jira]` section, keeping the rest of the file intact.
+    pub fn set_jira(vault: &Path, jira: &JiraConfig) -> anyhow::Result<()> {
+        let path = vault.join(CONFIG_PATH);
+        let text = std::fs::read_to_string(&path).unwrap_or_default();
+        let mut doc: toml_edit::DocumentMut = text.parse()?;
+        let mut table = toml_edit::Table::new();
+        table["base_url"] = toml_edit::value(jira.base_url.trim_end_matches('/'));
+        table["email"] = toml_edit::value(&jira.email);
+        if let Some(m) = jira.sync_minutes {
+            table["sync_minutes"] = toml_edit::value(m as i64);
+        }
+        let mut queries = toml_edit::Table::new();
+        for (name, jql) in &jira.queries {
+            queries[name.as_str()] = toml_edit::value(jql);
+        }
+        table["queries"] = toml_edit::Item::Table(queries);
+        doc["jira"] = toml_edit::Item::Table(table);
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        std::fs::write(&path, doc.to_string())?;
+        Ok(())
+    }
+
+    /// Folders hidden from agents (`[folders."x"] agent = "none"`).
+    pub fn hidden_folders(&self) -> Vec<String> {
+        self.folders
+            .iter()
+            .filter(|(_, r)| r.agent.as_deref() == Some("none"))
+            .map(|(f, _)| f.trim_matches('/').to_string())
+            .collect()
+    }
+
+    /// The agent pinned to the folder containing `rel`, if any (longest match).
+    pub fn folder_agent(&self, rel: &str) -> Option<&str> {
+        self.folders
+            .iter()
+            .filter(|(f, _)| {
+                let f = f.trim_matches('/');
+                rel == f || rel.starts_with(&format!("{f}/"))
+            })
+            .max_by_key(|(f, _)| f.len())
+            .and_then(|(_, r)| r.agent.as_deref())
+    }
+
     pub fn is_always_allowed(&self, agent: &str, tool_kind: &str) -> bool {
         self.permissions
             .always_allow
@@ -215,6 +293,14 @@ mod tests {
             output = "reports/{week}.md"
 
             [[schedules]]
+            id = "eod-log"
+            cron = "0 18 * * MON-FRI"
+            kind = "agent"
+            prompt = "Write the end-of-day log"
+            output = "logs/{month}.md"
+            output_mode = "append"
+
+            [[schedules]]
             id = "jira"
             cron = "0 */15 * * * *"
             kind = "jira-sync"
@@ -224,8 +310,22 @@ mod tests {
         assert_eq!(cfg.agent.default.as_deref(), Some("junie"));
         assert!(cfg.is_always_allowed("junie", "read"));
         assert!(!cfg.is_always_allowed("junie", "edit"));
-        assert_eq!(cfg.schedules.len(), 2);
-        assert!(matches!(cfg.schedules[1].job, JobConfig::JiraSync));
+        assert_eq!(cfg.schedules.len(), 3);
+        assert!(matches!(
+            cfg.schedules[0].job,
+            JobConfig::Agent {
+                output_mode: OutputMode::Replace,
+                ..
+            }
+        ));
+        assert!(matches!(
+            cfg.schedules[1].job,
+            JobConfig::Agent {
+                output_mode: OutputMode::Append,
+                ..
+            }
+        ));
+        assert!(matches!(cfg.schedules[2].job, JobConfig::JiraSync));
         assert_eq!(cfg.hotkeys.capture, "CommandOrControl+Shift+Space");
     }
 

@@ -34,7 +34,6 @@ impl AuditLog {
         }));
     }
 
-    #[allow(dead_code)] // used by tasks, Jira sync and the scheduler
     /// Records an app-side action (task archived, Jira synced, job run).
     pub fn record_app(&self, action: &str, detail: serde_json::Value) {
         self.write(json!({

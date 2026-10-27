@@ -1,6 +1,6 @@
 //! Agent commands: discovery, connect, sessions, prompts, permissions.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use adjutant_acp::{
@@ -9,10 +9,11 @@ use adjutant_acp::{
 };
 use adjutant_core::agents::{self, Discovery};
 use adjutant_core::config::{PermissionRule, VaultConfig};
+use adjutant_core::secrets;
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, State};
 
-use crate::state::{AppState, CmdResult, err};
+use crate::state::{AppState, CmdResult, blocking, err};
 
 /// Applies the vault's "always allow" rules; everything else asks the user.
 struct ConfigPolicy {
@@ -62,6 +63,59 @@ pub async fn agents_trust_vault(state: State<'_, AppState>) -> CmdResult<Discove
     .map_err(err)?
 }
 
+/// Resolves an agent id (or the vault default) into a launch spec and a
+/// sandbox that hides `agent = "none"` folders. Shared with scheduled jobs.
+pub async fn prepare_launch(
+    vault: &Path,
+    agent_id: Option<String>,
+) -> CmdResult<(AgentLaunch, Sandbox)> {
+    let v = vault.to_path_buf();
+    blocking(move || {
+        let cfg = VaultConfig::load(&v)?;
+        let discovery = agents::discover(&v, &cfg);
+        let id = agent_id
+            .or(discovery.default_agent.clone())
+            .ok_or_else(|| {
+                anyhow::anyhow!("no agent configured; add one to the vault's mise.toml")
+            })?;
+        let entry = discovery
+            .agents
+            .iter()
+            .find(|a| a.id == id)
+            .ok_or_else(|| anyhow::anyhow!("unknown agent `{id}`"))?;
+        if let Some(e) = &discovery.mise_error
+            && entry.use_mise
+        {
+            anyhow::bail!("{e}");
+        }
+        anyhow::ensure!(
+            entry.installed,
+            "{} is not installed. Add this line to mise.toml: {}",
+            entry.name,
+            entry.mise_line.clone().unwrap_or_default()
+        );
+        let mut env = entry.env.clone();
+        for (var, name) in &entry.secrets {
+            if let Some(value) = secrets::get_secret(name)? {
+                env.insert(var.clone(), value);
+            }
+        }
+        let launch = AgentLaunch {
+            id: entry.id.clone(),
+            program: entry.command.clone(),
+            args: entry.args.clone(),
+            env,
+            cwd: v.clone(),
+            use_mise: entry.use_mise,
+            mise_bin: discovery.mise_bin.clone(),
+        };
+        let sandbox = Sandbox::new([v.clone()])
+            .with_denied(cfg.hidden_folders().into_iter().map(|f| v.join(f)));
+        Ok((launch, sandbox))
+    })
+    .await
+}
+
 /// Starts `agent_id` (or the vault default), replacing any running agent.
 #[tauri::command]
 pub async fn agent_connect(
@@ -70,47 +124,13 @@ pub async fn agent_connect(
     agent_id: Option<String>,
 ) -> CmdResult<AgentInfo> {
     let vault = state.vault()?;
-    let cfg = VaultConfig::load(&vault).map_err(err)?;
-    let discovery = {
-        let vault = vault.clone();
-        let cfg = cfg.clone();
-        tauri::async_runtime::spawn_blocking(move || agents::discover(&vault, &cfg))
-            .await
-            .map_err(err)?
-    };
-    let id = agent_id
-        .or(discovery.default_agent.clone())
-        .ok_or_else(|| "no agent configured; add one to the vault's mise.toml".to_string())?;
-    let entry = discovery
-        .agents
-        .iter()
-        .find(|a| a.id == id)
-        .ok_or_else(|| format!("unknown agent `{id}`"))?;
-    if !entry.installed && discovery.mise_error.is_none() {
-        return Err(format!(
-            "{} is not installed. Add this line to mise.toml: {}",
-            entry.name,
-            entry.mise_line.clone().unwrap_or_default()
-        ));
-    }
-
-    let mut env = entry.env.clone();
-    env.extend(crate::secrets::resolve(&entry.secrets));
-    let launch = AgentLaunch {
-        id: entry.id.clone(),
-        program: entry.command.clone(),
-        args: entry.args.clone(),
-        env,
-        cwd: vault.clone(),
-        use_mise: entry.use_mise,
-        mise_bin: discovery.mise_bin.clone(),
-    };
+    let (launch, sandbox) = prepare_launch(&vault, agent_id).await?;
 
     if let Some(old) = state.agent.lock().await.take() {
         old.stop();
     }
 
-    let agent_id = entry.id.clone();
+    let agent_id = launch.id.clone();
     let audit = state.audit.clone();
     let sink = Arc::new(move |event: AgentEvent| {
         audit.record(&agent_id, &event);
@@ -122,14 +142,9 @@ pub async fn agent_connect(
             },
         );
     });
-    let handle = AgentHandle::start(
-        launch,
-        Sandbox::new([vault.clone()]),
-        Arc::new(ConfigPolicy { vault }),
-        sink,
-    )
-    .await
-    .map_err(|e| format!("{e:#}"))?;
+    let handle = AgentHandle::start(launch, sandbox, Arc::new(ConfigPolicy { vault }), sink)
+        .await
+        .map_err(|e| format!("{e:#}"))?;
     let info = handle.info().clone();
     *state.agent.lock().await = Some(Arc::new(handle));
     Ok(info)

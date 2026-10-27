@@ -7,12 +7,13 @@ import {
   type PromptPart,
   type ToolCallUpdate,
 } from "./api";
+import { app } from "./app.svelte";
 
 export type ChatItem =
   | { kind: "user"; id: string; text: string }
   | { kind: "agent"; id: string; text: string }
   | { kind: "thought"; id: string; text: string }
-  | ({ kind: "tool"; id: string } & ToolCallUpdate)
+  | { kind: "tool"; id: string; call: ToolCallUpdate }
   | { kind: "plan"; id: string; entries: PlanEntry[] }
   | {
       kind: "permission";
@@ -43,7 +44,7 @@ export class ChatState {
     try {
       const info = await api.agentConnect(agentId);
       this.agentName = info.agentInfo?.title ?? info.agentInfo?.name ?? agentId;
-      this.agentId = agentId;
+      this.agentId = agentId ?? (await api.agentsDiscover()).defaultAgent;
       this.sessionId = await api.chatNewSession();
     } catch (e) {
       this.notice(String(e), "error");
@@ -53,15 +54,37 @@ export class ChatState {
     }
   }
 
+  /** Opens the agent panel, starts the agent if needed and sends `text`. */
+  async ask(text: string, files: string[] = [], label?: string) {
+    app.agentOpen = true;
+    if (!this.sessionId) await this.connect(this.agentId);
+    if (this.sessionId) await this.send(text, files, label);
+  }
+
+  private async persist() {
+    if (!this.sessionId) return;
+    const first = this.items.find((i) => i.kind === "user");
+    await api
+      .sessionSave({
+        id: this.sessionId,
+        agentId: this.agentId ?? "",
+        title: first && first.kind === "user" ? first.text.slice(0, 80) : "Untitled",
+        updatedAt: new Date().toISOString(),
+        items: $state.snapshot(this.items),
+      })
+      .catch(() => {});
+  }
+
   async newSession() {
     this.items = [];
     this.sessionId = await api.chatNewSession();
   }
 
-  async send(text: string, files: string[] = []) {
+  /** `label` is what the conversation shows instead of a long canned prompt. */
+  async send(text: string, files: string[] = [], label?: string) {
     if (!this.sessionId || this.busy || !text.trim()) return;
     const parts: PromptPart[] = [{ type: "text", text }, ...files.map((path) => ({ type: "file" as const, path }))];
-    this.items.push({ kind: "user", id: nextId(), text });
+    this.items.push({ kind: "user", id: nextId(), text: label ?? text });
     this.busy = true;
     try {
       const stop = await api.chatPrompt(this.sessionId, parts);
@@ -70,6 +93,8 @@ export class ChatState {
       this.notice(String(e), "error");
     } finally {
       this.busy = false;
+      this.persist();
+      app.refreshTasks();
     }
   }
 
@@ -136,24 +161,20 @@ export class ChatState {
         break;
       case "user_message_chunk":
         break;
-      case "tool_call": {
-        const { sessionUpdate, ...call } = u;
-        const existing = this.findTool(call.toolCallId);
-        if (existing) Object.assign(existing, call);
-        else this.items.push({ kind: "tool", id: call.toolCallId, ...call });
-        break;
-      }
+      case "tool_call":
       case "tool_call_update": {
         const { sessionUpdate, ...fields } = u;
-        const existing = this.findTool(fields.toolCallId);
-        const clean = Object.fromEntries(Object.entries(fields).filter(([, v]) => v != null));
-        if (existing) Object.assign(existing, clean);
-        else this.items.push({ kind: "tool", id: fields.toolCallId, ...clean } as any);
+        const clean = Object.fromEntries(Object.entries(fields).filter(([, v]) => v != null)) as unknown as ToolCallUpdate;
+        const existing = this.findTool(clean.toolCallId);
+        if (existing) Object.assign(existing.call, clean);
+        else this.items.push({ kind: "tool", id: `tool-${clean.toolCallId}`, call: clean });
         break;
       }
       case "plan": {
-        const plan = this.items.findLast((i) => i.kind === "plan");
-        if (plan && plan.kind === "plan" && this.items.at(-1) === plan) plan.entries = u.entries;
+        // One plan per turn, updated in place.
+        const lastUser = this.items.findLastIndex((i) => i.kind === "user");
+        const plan = this.items.findLast((i, idx) => i.kind === "plan" && idx > lastUser);
+        if (plan && plan.kind === "plan") plan.entries = u.entries;
         else this.items.push({ kind: "plan", id: nextId(), entries: u.entries });
         break;
       }
@@ -161,7 +182,7 @@ export class ChatState {
   }
 
   private findTool(id: string) {
-    return this.items.find((i) => i.kind === "tool" && i.id === id) as
+    return this.items.find((i) => i.kind === "tool" && i.call.toolCallId === id) as
       | Extract<ChatItem, { kind: "tool" }>
       | undefined;
   }

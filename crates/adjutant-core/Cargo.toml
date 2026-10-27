@@ -18,6 +18,14 @@ toml_edit = "0.23"
 chrono = { workspace = true }
 regex = { workspace = true }
 dunce = { workspace = true }
+ignore = "0.4"
+grep-searcher = "0.1"
+grep-regex = "0.1"
+grep-matcher = "0.1"
+croner = "4"
+reqwest = { version = "0.13", default-features = false, features = ["json", "rustls", "query", "http2", "system-proxy"] }
+base64 = "0.22"
+keyring = "4"
 
 [dev-dependencies]
 tempfile = "3"

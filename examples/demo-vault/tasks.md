@@ -3,6 +3,7 @@
 ## Now
 - [ ] Review PLAT-123 rollout plan #platform @due(2026-10-30)
 - [ ] Prepare 1:1 agenda for [[people/alex]]
+- [ ] Take a shower #personal @due(2026-10-27)
 
 ## Next
 - [ ] Draft Q1 roadmap trade-offs #platform

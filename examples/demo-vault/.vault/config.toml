@@ -1,4 +1,150 @@
-# Adjutant vault configuration.
+# Adjutant vault configuration. Every section is optional.
+# Uncomment and edit the examples you need.
 
+# --- Default agent -----------------------------------------------------------
+# Agent id from the picker: junie, claude-agent-acp, gemini, codex-acp, or one
+# of your own [agents.*] entries below.
 [agent]
 default = "claude-agent-acp"
+
+# --- Custom agents or overrides of built-in launch settings --------------------
+# [agents.my-agent]
+# name = "My ACP agent"
+# command = "my-agent-acp"
+# args = ["--acp"]
+# use_mise = false                       # run directly instead of `mise exec --`
+# env = { LOG_LEVEL = "warn" }
+# secrets = { MY_API_KEY = "my-agent-api-key" }   # env var -> keyring entry
+
+# --- Permissions -----------------------------------------------------------------
+# Written by the app when you pick "Always allow" in a permission prompt.
+# tool is an ACP tool kind (read, edit, execute, ...) or "*".
+# [[permissions.always_allow]]
+# agent = "junie"
+# tool = "read"
+
+# --- Per-folder agent rules ----------------------------------------------------
+# Pin an agent for a folder, or use "none" to hide the folder from agents.
+# [folders."people"]
+# agent = "none"
+
+# --- Jira Cloud ------------------------------------------------------------------
+# The API token is stored in the system keyring, never in this file.
+# [jira]
+# base_url = "https://your-company.atlassian.net"
+# email = "you@your-company.com"
+# sync_minutes = 15
+#
+# [jira.queries]
+# mine = "assignee = currentUser() AND resolution = Unresolved ORDER BY updated DESC"
+# team = "project = PLAT AND sprint in openSprints() ORDER BY rank"
+
+# --- Hotkeys -----------------------------------------------------------------------
+# [hotkeys]
+# capture = "CommandOrControl+Shift+Space"
+
+# --- Schedules -------------------------------------------------------------------
+# cron fields: sec min hour day-of-month month day-of-week
+# Output placeholders: {date} is YYYY-MM-DD, {week} is YYYY-Www, {month} is YYYY-MM.
+
+[[schedules]]
+id = "jira-sync"
+name = "Jira sync"
+cron = "0 */15 * * * *"
+kind = "jira-sync"
+
+[[schedules]]
+id = "task-archive"
+name = "Archive completed tasks"
+cron = "0 55 23 * * *"
+kind = "task-archive"
+
+[[schedules]]
+id = "weekly-report"
+name = "Weekly report"
+cron = "0 0 16 * * FRI"
+kind = "agent"
+enabled = false # demo vault: turn on in Schedules
+output = "reports/{week}.md"
+prompt = """
+Write my weekly report for the current ISO week.
+
+Read, in this order:
+1. `tasks/done/` — the current month's file (and last month's if the week spans two months): tasks completed this week (`@done(...)` dates inside this week).
+2. `log/` — the current month's end-of-day entries for this week.
+3. `tasks.md` — what is still open under Now, Next and Waiting on.
+4. `jira/snapshot.md` — ticket status changes, blockers and anything overdue.
+5. Notes under `people/` and `teams/` modified this week (use `git log --since` or `fd --changed-within 7d -e md`).
+
+Produce these sections:
+## Highlights — 3-5 outcomes that matter to my manager, each with impact.
+## Delivered — completed work, grouped by team or project, with Jira keys.
+## In progress — what moves next week, with owners.
+## Risks and blockers — what is late or stuck, why, and what I need.
+## People — notable wins, concerns or feedback per person (keep it factual).
+## Next week — top 3 priorities.
+
+Rules: be concise and factual, do not invent anything, cite every claim with
+the source note as a [[path/without-extension]] link or a Jira key. Return
+Markdown only (no preamble, no code fences); it is saved to the output file.
+"""
+
+[[schedules]]
+id = "end-of-day"
+name = "End-of-day summary"
+cron = "0 0 18 * * MON-FRI"
+kind = "agent"
+enabled = false # demo vault: turn on in Schedules
+output = "log/{month}.md"
+output_mode = "append"
+prompt = """
+Write today's end-of-day log entry.
+
+Read:
+1. `tasks/done/` — the current month's file: tasks marked `@done(<today>)`.
+2. `tasks.md` — open tasks, especially overdue `@due(...)` and `## Waiting on`.
+3. Notes created or changed today (`fd --changed-within 1d -e md`, `git diff --stat`),
+   including `inbox/`, `people/` and `teams/`.
+4. `jira/snapshot.md` — tickets that changed status today.
+5. `log/` — the current month's file, to avoid repeating earlier entries.
+
+Output exactly one entry, starting with a `## YYYY-MM-DD` heading for today, with:
+- **Done:** bullets of what was completed.
+- **Decisions and notes:** important things learned or decided.
+- **Open loops:** waiting-on items and overdue tasks, with owners.
+- **Tomorrow:** the 3 most important next steps.
+
+Rules: cite notes as [[path/without-extension]] links and tickets by key; do not
+invent anything; skip empty sections. Return Markdown only (no preamble, no code
+fences); it is appended to the monthly log.
+"""
+
+[[schedules]]
+id = "morning-plan"
+name = "Morning plan"
+cron = "0 30 8 * * MON-FRI"
+kind = "agent"
+enabled = false # demo vault: turn on in Schedules
+output = "reports/plan-{date}.md"
+prompt = """
+Plan my day.
+
+Read:
+1. `tasks.md` — Now, Next and Waiting on; note every `@due(...)` that is today,
+   overdue, or within 3 days.
+2. `jira/snapshot.md` — my open tickets, blockers, anything that changed overnight.
+3. `log/` — the latest entry's "Tomorrow" and "Open loops".
+4. `inbox/` — untriaged captures that need a decision today.
+5. `people/` — for anyone I meet today (if mentioned in tasks or notes), their
+   last 1:1 action items.
+
+Produce:
+## Top 3 — the outcomes that would make today a success, and why.
+## Schedule suggestions — focus blocks and what to do in each.
+## Follow-ups — waiting-on items to chase, with the person to ping.
+## Prep — 1:1s or meetings to prepare for, with links to the relevant notes.
+## Can wait — things to explicitly defer.
+
+Rules: cite notes as [[path/without-extension]] links and tickets by key; do not
+invent meetings or tasks. Return Markdown only (no preamble, no code fences).
+"""

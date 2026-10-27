@@ -21,9 +21,15 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 adjutant-acp = { path = "../crates/adjutant-acp" }
 adjutant-core = { path = "../crates/adjutant-core" }
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
 tauri-plugin-opener = "2"
 tauri-plugin-dialog = "2"
+tauri-plugin-global-shortcut = "2"
+tauri-plugin-autostart = "2"
+tauri-plugin-notification = "2"
+tauri-plugin-single-instance = "2"
+notify = "8"
+notify-debouncer-full = "0.7"
 anyhow = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

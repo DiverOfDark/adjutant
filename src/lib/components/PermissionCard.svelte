@@ -43,16 +43,16 @@
 
 <style>
   .perm {
-    border: 1px solid var(--accent);
+    border: 1px solid var(--verdigris);
     border-radius: 8px;
     padding: 0.6em;
     display: flex;
     flex-direction: column;
     gap: 0.5em;
-    background: color-mix(in srgb, var(--accent) 6%, var(--bg));
+    background: color-mix(in srgb, var(--verdigris) 6%, var(--paper));
   }
-  .perm.done { border-color: var(--border); background: none; }
-  .q { font-size: 0.85em; color: var(--fg-muted); }
+  .perm.done { border-color: var(--rule); background: none; }
+  .q { font-size: 0.85em; color: var(--muted); }
   .actions { display: flex; gap: 0.4em; flex-wrap: wrap; }
-  .decided { font-size: 0.85em; color: var(--fg-muted); }
+  .decided { font-size: 0.85em; color: var(--muted); }
 </style>

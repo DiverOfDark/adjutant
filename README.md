@@ -4,8 +4,21 @@
 list, and an AI agent that files, links and summarizes them — all in a plain
 folder you own.
 
-> Status: early development (Phase 0 of the [roadmap](docs/PRD.md#milestones)).
-> The ACP client and a streaming chat work; the editor and tasks are next.
+> Status: early development. Phases 0–3 of the [roadmap](docs/PRD.md#milestones)
+> are implemented: vault, live-preview editor, tasks, agent chat, Jira Cloud
+> sync and the scheduler. Expect rough edges.
+
+## What's in it
+
+- **Today**: the day on one page. Now, Waiting on (grouped by person), due this week, inbox count, your Jira tickets, and one-click *Plan my day* / *End-of-day summary*.
+- **Editor**: CodeMirror 6 with live preview. Markdown syntax hides away from the cursor, `[[wikilinks]]` autocomplete and click through, checkboxes tick, Jira keys show live status, backlinks under every note.
+- **Tasks**: one `tasks.md` with Now / Next / Waiting on / Someday. Ticking a task stamps `@done(date)` and moves it to `tasks/done/YYYY-MM.md`. Open tasks from every note in one list.
+- **People**: a person's note shows what you're waiting on from them and what's open, for 1:1 prep, plus *Draft review*.
+- **Agent**: any ACP agent installed by the vault's `mise.toml`. Streams messages, plans, tool calls and diffs; asks before acting; "always allow" per tool kind. Actions: plan my day, organize inbox, extract tasks, end-of-day summary, draft review, ask about a repo.
+- **Quick capture**: a global shortcut (default `Ctrl+Shift+Space`) opens a small window. Enter adds a task, Ctrl+Enter files a note to `inbox/`.
+- **Jira Cloud**: background sync every 15 minutes into `jira/snapshot.md` and `jira/cache.json`; token in the system keyring.
+- **Schedules**: cron jobs in `.vault/config.toml`: Jira sync, task archive, and agent jobs (weekly report, end-of-day log, morning plan) that write to `reports/` and `log/`. Missed runs catch up once. Tray icon, autostart, desktop notifications.
+- **Search**: ripgrep-powered full-text search; `Ctrl+K` command palette for notes, commands and templates.
 
 ## Why
 

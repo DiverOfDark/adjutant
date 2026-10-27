@@ -58,10 +58,10 @@
 
 <style>
   .tool {
-    border: 1px solid var(--border);
+    border: 1px solid var(--rule);
     border-radius: 6px;
     font-size: 0.85em;
-    background: var(--bg-raised);
+    background: var(--sheet);
   }
   .head {
     all: unset;
@@ -74,16 +74,16 @@
     cursor: pointer;
   }
   .head:disabled { cursor: default; }
-  .icon { font-family: var(--font-mono); color: var(--fg-muted); width: 1em; text-align: center; }
+  .icon { font-family: var(--font-mono); color: var(--muted); width: 1em; text-align: center; }
   .title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); }
-  .status { color: var(--fg-muted); font-size: 0.85em; }
-  [data-status="in_progress"] .status { color: var(--accent); }
-  [data-status="failed"] .status { color: var(--danger); }
-  [data-status="completed"] .status { color: var(--ok); }
-  .body { border-top: 1px solid var(--border); padding: 0.4em 0.6em; max-height: 320px; overflow: auto; }
-  .path { font-family: var(--font-mono); color: var(--fg-muted); margin-bottom: 0.2em; }
+  .status { color: var(--muted); font-size: 0.85em; }
+  [data-status="in_progress"] .status { color: var(--verdigris); }
+  [data-status="failed"] .status { color: var(--signal); }
+  [data-status="completed"] .status { color: var(--verdigris); }
+  .body { border-top: 1px solid var(--rule); padding: 0.4em 0.6em; max-height: 320px; overflow: auto; }
+  .path { font-family: var(--font-mono); color: var(--muted); margin-bottom: 0.2em; }
   pre { margin: 0 0 0.4em; font-family: var(--font-mono); font-size: 0.92em; white-space: pre-wrap; }
   .diff .l { display: block; }
-  .diff .add { background: color-mix(in srgb, var(--ok) 18%, transparent); }
-  .diff .del { background: color-mix(in srgb, var(--danger) 18%, transparent); }
+  .diff .add { background: color-mix(in srgb, var(--verdigris) 18%, transparent); }
+  .diff .del { background: color-mix(in srgb, var(--signal) 18%, transparent); }
 </style>
