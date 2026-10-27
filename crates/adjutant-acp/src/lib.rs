@@ -10,7 +10,7 @@ mod launch;
 mod sandbox;
 mod terminal;
 
-pub use client::{AgentHandle, AgentInfo, PromptPart};
+pub use client::{AUTH_REQUIRED, AgentHandle, AgentInfo, PromptPart};
 pub use events::{AgentEvent, AskAlways, EventSink, PermissionPolicy, PolicyDecision};
 pub use launch::AgentLaunch;
 pub use sandbox::{Sandbox, SandboxError};

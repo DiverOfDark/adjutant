@@ -13,6 +13,7 @@ dependencies = [
  "dunce",
  "notify",
  "notify-debouncer-full",
+ "regex",
  "serde",
  "serde_json",
  "tauri",

@@ -119,6 +119,35 @@ export interface AgentInfo {
   agentInfo: { name?: string; title?: string; version?: string } | null;
   agentCapabilities: Record<string, unknown>;
   protocolVersion: unknown;
+  authMethods: AuthMethod[] | null;
+}
+
+export interface AuthMethod {
+  id: string;
+  name: string;
+  description?: string | null;
+  /** "terminal": run the agent with `args` in a terminal; otherwise the agent logs in itself. */
+  type?: string;
+  args?: string[];
+}
+
+export interface SetupStatus {
+  os: "linux" | "macos" | "windows";
+  initialized: boolean;
+  gitAvailable: boolean;
+  gitRepo: boolean;
+  miseVersion: string | null;
+  missingTools: string[];
+  discovery: Discovery;
+  hiddenFolders: string[];
+  agentSchedules: { id: string; name: string; enabled: boolean }[];
+  jiraConfigured: boolean;
+  autostart: boolean;
+  checkUpdates: boolean;
+  wayland: boolean;
+  captureCommand: string;
+  hotkeyError: string | null;
+  done: boolean;
 }
 
 export type PromptPart = { type: "text"; text: string } | { type: "file"; path: string };
@@ -245,6 +274,8 @@ export interface AppSettings {
   autostart: boolean;
   captureHotkey: string;
   closeToTray: boolean;
+  checkUpdates: boolean;
+  hotkeyError?: string | null;
 }
 
 export const api = {
@@ -303,10 +334,20 @@ export const api = {
   appSettings: () => call<AppSettings>("app_settings"),
   appSaveSettings: (settings: AppSettings) => call<void>("app_save_settings", { settings }),
   captureHide: () => call<void>("capture_hide"),
+  // setup
+  setupStatus: () => call<SetupStatus>("setup_status"),
+  setupInstallTools: () => call<void>("setup_install_tools"),
+  setupGitInit: () => call<string>("setup_git_init"),
+  setupHideFolders: (folders: string[], hidden: boolean) => call<void>("setup_hide_folders", { folders, hidden }),
+  setupComplete: () => call<void>("setup_complete"),
+  agentAuthenticate: (methodId: string) => call<void>("agent_authenticate", { methodId }),
+  agentLoginTerminal: (agentId: string | null, methodId: string | null) =>
+    call<string>("agent_login_terminal", { agentId, methodId }),
 };
 
 export const onAgentEvent = (cb: (e: AgentEvent) => void) => listenTo<AgentEvent>("agent-event", cb);
 export const onVaultChanged = (cb: (paths: string[]) => void) => listenTo<string[]>("vault-changed", cb);
 export const onJiraSynced = (cb: (c: JiraCache) => void) => listenTo<JiraCache>("jira-synced", cb);
+export const onSetupLog = (cb: (line: string) => void) => listenTo<string>("setup-log", cb);
 export const onScheduleRun = (cb: (r: { id: string; record: RunRecord }) => void) =>
   listenTo<{ id: string; record: RunRecord }>("schedule-run", cb);

@@ -227,3 +227,137 @@ pub async fn permission_respond(
     agent.respond_permission(request_id, option_id);
     Ok(())
 }
+
+/// ACP `authenticate` with one of the agent's auth methods ("agent" type:
+/// the agent runs the login itself, e.g. opens a browser).
+#[tauri::command]
+pub async fn agent_authenticate(state: State<'_, AppState>, method_id: String) -> CmdResult<()> {
+    let agent = state.current_agent().await?;
+    agent
+        .authenticate(&method_id)
+        .await
+        .map_err(|e| format!("{e:#}"))
+}
+
+/// Opens a system terminal in the vault running the agent's login: the
+/// "terminal" auth method's args, or the bare agent command (an interactive
+/// CLI that logs in on first run). Returns the command so the UI can show it.
+#[tauri::command]
+pub async fn agent_login_terminal(
+    state: State<'_, AppState>,
+    agent_id: Option<String>,
+    method_id: Option<String>,
+) -> CmdResult<String> {
+    let vault = state.vault()?;
+    let (launch, _) = prepare_launch(&vault, agent_id).await?;
+    let mut args: Vec<String> = Vec::new();
+    if let (Some(method), Some(agent)) = (&method_id, state.agent.lock().await.clone())
+        && let Some(m) = agent.info().auth_methods.as_array().and_then(|ms| {
+            ms.iter()
+                .find(|m| m["id"].as_str() == Some(method.as_str()))
+        })
+    {
+        args = m["args"]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .filter_map(|x| x.as_str().map(String::from))
+                    .collect()
+            })
+            .unwrap_or_default();
+    }
+    let mut parts: Vec<String> = Vec::new();
+    if launch.use_mise {
+        let mise = launch
+            .mise_bin
+            .as_ref()
+            .map(|p| p.display().to_string())
+            .unwrap_or_else(|| "mise".into());
+        parts.extend([shell_quote(&mise), "exec".into(), "--".into()]);
+    }
+    parts.push(shell_quote(&launch.program));
+    parts.extend(args.iter().map(|a| shell_quote(a)));
+    let command = parts.join(" ");
+    open_terminal(&vault, &command).map_err(|e| {
+        format!(
+            "{e}. Run this in a terminal in {}: {command}",
+            vault.display()
+        )
+    })?;
+    Ok(command)
+}
+
+fn shell_quote(s: &str) -> String {
+    if !s.is_empty()
+        && s.chars()
+            .all(|c| c.is_ascii_alphanumeric() || "-_./=:@".contains(c))
+    {
+        s.to_string()
+    } else {
+        format!("'{}'", s.replace('\'', "'\\''"))
+    }
+}
+
+fn open_terminal(cwd: &Path, command: &str) -> anyhow::Result<()> {
+    use std::process::Command;
+    #[cfg(target_os = "macos")]
+    {
+        let script = format!(
+            "tell application \"Terminal\" to do script \"cd {} && {}\"",
+            shell_quote(&cwd.display().to_string()).replace('"', "\\\""),
+            command.replace('"', "\\\"")
+        );
+        Command::new("osascript")
+            .args([
+                "-e",
+                &script,
+                "-e",
+                "tell application \"Terminal\" to activate",
+            ])
+            .spawn()?;
+        return Ok(());
+    }
+    #[cfg(windows)]
+    {
+        Command::new("cmd")
+            .args(["/C", "start", "Adjutant login", "cmd", "/K", command])
+            .current_dir(cwd)
+            .spawn()?;
+        return Ok(());
+    }
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        let script = format!("{command}; echo; read -r -p 'Done. Press Enter to close.' _");
+        let mut candidates: Vec<(String, Vec<&str>)> = Vec::new();
+        if let Ok(t) = std::env::var("TERMINAL") {
+            candidates.push((t, vec!["-e"]));
+        }
+        for (bin, args) in [
+            ("x-terminal-emulator", vec!["-e"]),
+            ("gnome-terminal", vec!["--"]),
+            ("kgx", vec!["--"]),
+            ("ptyxis", vec!["--"]),
+            ("konsole", vec!["-e"]),
+            ("xfce4-terminal", vec!["-x"]),
+            ("alacritty", vec!["-e"]),
+            ("kitty", vec![]),
+            ("wezterm", vec!["start", "--"]),
+            ("foot", vec![]),
+            ("xterm", vec!["-e"]),
+        ] {
+            candidates.push((bin.to_string(), args));
+        }
+        for (bin, args) in candidates {
+            let ok = Command::new(&bin)
+                .args(&args)
+                .args(["bash", "-lc", &script])
+                .current_dir(cwd)
+                .spawn()
+                .is_ok();
+            if ok {
+                return Ok(());
+            }
+        }
+        anyhow::bail!("no terminal emulator found")
+    }
+}

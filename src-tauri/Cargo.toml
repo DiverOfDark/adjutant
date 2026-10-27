@@ -40,4 +40,5 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 chrono = { workspace = true }
 dunce = { workspace = true }
+regex = { workspace = true }
 

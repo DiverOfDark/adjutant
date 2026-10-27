@@ -7,7 +7,8 @@ export type View =
   | { kind: "tasks" }
   | { kind: "jira" }
   | { kind: "schedules" }
-  | { kind: "settings" };
+  | { kind: "settings" }
+  | { kind: "setup" };
 
 export type SidebarMode = "files" | "search" | "people";
 

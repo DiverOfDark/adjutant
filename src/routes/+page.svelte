@@ -14,16 +14,17 @@
   import JiraView from "$lib/views/JiraView.svelte";
   import SchedulesView from "$lib/views/SchedulesView.svelte";
   import SettingsView from "$lib/views/SettingsView.svelte";
+  import SetupView from "$lib/views/SetupView.svelte";
 
   let error = $state<string | null>(null);
   let loading = $state(true);
-  let needsSetup = $state(false);
 
   async function open(path: string) {
     try {
       await app.openVault(path);
-      needsSetup = !app.vault?.initialized;
       error = null;
+      const status = await api.setupStatus().catch(() => null);
+      if (status && !status.done) app.go({ kind: "setup" });
     } catch (e) {
       error = String(e);
     }
@@ -34,13 +35,6 @@
     const { open: dialog } = await import("@tauri-apps/plugin-dialog");
     const dir = await dialog({ directory: true, title: "Choose a folder for your vault" });
     if (typeof dir === "string") await open(dir);
-  }
-
-  async function setup() {
-    const created = await api.vaultScaffold();
-    needsSetup = false;
-    await app.refresh();
-    app.notify(`Set up the vault: ${created.length} files and folders added`);
   }
 
   function onKey(e: KeyboardEvent) {
@@ -111,13 +105,6 @@
     <Rail />
     <Sidebar />
     <main class="center">
-      {#if needsSetup}
-        <div class="setup">
-          <p><strong>This folder isn't set up as a vault yet.</strong> Add the task list, folders, agent guidelines and default schedules? Existing files are left alone.</p>
-          <button class="primary" onclick={setup}>Set up vault</button>
-          <button class="quiet" onclick={() => (needsSetup = false)}>Not now</button>
-        </div>
-      {/if}
       {#key app.view.kind === "note" ? "note" : app.view.kind}
         {#if app.view.kind === "today"}<TodayView />
         {:else if app.view.kind === "note"}<NoteView path={app.view.path} line={app.view.line} />
@@ -125,6 +112,7 @@
         {:else if app.view.kind === "jira"}<JiraView />
         {:else if app.view.kind === "schedules"}<SchedulesView />
         {:else if app.view.kind === "settings"}<SettingsView />
+        {:else if app.view.kind === "setup"}<SetupView />
         {/if}
       {/key}
     </main>
@@ -206,25 +194,13 @@
     flex-direction: column;
     background: var(--sheet);
   }
-  .center > :global(*:not(.setup)) {
+  .center > :global(*) {
     flex: 1;
     min-height: 0;
   }
   .agentpane {
     min-height: 0;
     border-left: 1px solid var(--rule);
-  }
-  .setup {
-    display: flex;
-    align-items: center;
-    gap: 0.8rem;
-    padding: 0.7rem 1.4rem;
-    background: var(--brass-wash);
-    font-size: 0.9rem;
-  }
-  .setup p {
-    flex: 1;
-    margin: 0;
   }
   .toast {
     position: fixed;

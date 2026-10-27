@@ -1,6 +1,7 @@
 // Chat state: turns ACP session updates into a list of renderable items.
 import {
   api,
+  type AuthMethod,
   type AgentEvent,
   type PermissionOption,
   type PlanEntry,
@@ -23,7 +24,9 @@ export type ChatItem =
       options: PermissionOption[];
       decided: string | null | undefined;
     }
-  | { kind: "notice"; id: string; text: string; level: "info" | "error" };
+  | { kind: "notice"; id: string; text: string; level: "info" | "error" }
+  /** The agent needs a login before it can open a session. */
+  | { kind: "auth"; id: string; methods: AuthMethod[]; message: string };
 
 let seq = 0;
 const nextId = () => `i${++seq}`;
@@ -45,13 +48,50 @@ export class ChatState {
       const info = await api.agentConnect(agentId);
       this.agentName = info.agentInfo?.title ?? info.agentInfo?.name ?? agentId;
       this.agentId = agentId ?? (await api.agentsDiscover()).defaultAgent;
-      this.sessionId = await api.chatNewSession();
+      this.authMethods = info.authMethods ?? [];
+      await this.openSession();
     } catch (e) {
-      this.notice(String(e), "error");
       this.agentName = null;
+      this.items.push({ kind: "auth", id: nextId(), methods: [], message: `${this.agentId ?? "The agent"} did not start: ${e}` });
     } finally {
       this.connecting = false;
     }
+  }
+
+  authMethods: AuthMethod[] = [];
+
+  /** Opens a session; a login request turns into an auth card. */
+  async openSession() {
+    try {
+      this.sessionId = await api.chatNewSession();
+      this.items = this.items.filter((i) => i.kind !== "auth");
+    } catch (e) {
+      const text = String(e);
+      if (text.includes("auth_required")) {
+        this.items.push({ kind: "auth", id: nextId(), methods: this.authMethods, message: "The agent needs you to log in first." });
+      } else throw e;
+    }
+  }
+
+  /** Runs a login method, then retries the session. */
+  async login(method: AuthMethod | null) {
+    try {
+      if (method && method.type !== "terminal") {
+        await api.agentAuthenticate(method.id);
+        await this.openSession();
+      } else {
+        const cmd = await api.agentLoginTerminal(this.agentId, method?.id ?? null);
+        this.notice(`Opened a terminal running ${cmd}. Finish the login there, then press Retry.`, "info");
+      }
+    } catch (e) {
+      this.notice(String(e), "error");
+    }
+  }
+
+  async retry() {
+    this.items = this.items.filter((i) => i.kind !== "auth");
+    if (this.agentName) await this.openSession();
+    else await this.connect(this.agentId);
   }
 
   /** Opens the agent panel, starts the agent if needed and sends `text`. */

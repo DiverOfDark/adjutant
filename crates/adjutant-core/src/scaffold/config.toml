@@ -64,6 +64,7 @@ id = "weekly-report"
 name = "Weekly report"
 cron = "0 0 16 * * FRI"
 kind = "agent"
+enabled = false # agent jobs spend credits: turn on in Schedules
 output = "reports/{week}.md"
 prompt = """
 Write my weekly report for the current ISO week.
@@ -93,6 +94,7 @@ id = "end-of-day"
 name = "End-of-day summary"
 cron = "0 0 18 * * MON-FRI"
 kind = "agent"
+enabled = false # agent jobs spend credits: turn on in Schedules
 output = "log/{month}.md"
 output_mode = "append"
 prompt = """

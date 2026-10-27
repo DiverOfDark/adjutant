@@ -25,6 +25,12 @@ class Updater {
       const { exit } = await import("@tauri-apps/plugin-process");
       await exit(0);
     });
+    const { api } = await import("./api");
+    const settings = await api.appSettings().catch(() => null);
+    if (settings && !settings.checkUpdates) {
+      this.note = "Update checks are off";
+      return;
+    }
     this.check();
     setInterval(() => this.check(), CHECK_EVERY_MS);
   }

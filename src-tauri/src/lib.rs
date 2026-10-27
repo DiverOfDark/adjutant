@@ -4,6 +4,7 @@ mod desktop;
 mod jira;
 mod schedules;
 mod settings;
+mod setup;
 mod state;
 mod tasks;
 mod vault;
@@ -18,8 +19,13 @@ pub fn run() {
         .init();
 
     tauri::Builder::default()
-        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            desktop::show_main(app);
+        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+            // `adjutant --capture` from a system shortcut toggles quick capture.
+            if args.iter().any(|a| a == "--capture") {
+                desktop::toggle_capture(app);
+            } else {
+                desktop::show_main(app);
+            }
         }))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
@@ -34,7 +40,7 @@ pub fn run() {
         .manage(AppState::default())
         .setup(|app| {
             desktop::setup(app.handle())?;
-            if std::env::args().any(|a| a == "--minimized")
+            if std::env::args().any(|a| a == "--minimized" || a == "--capture")
                 && let Some(w) = tauri::Manager::get_webview_window(app, "main")
             {
                 let _ = w.hide();
@@ -89,6 +95,13 @@ pub fn run() {
             settings::app_settings,
             settings::app_save_settings,
             desktop::capture_hide,
+            setup::setup_status,
+            setup::setup_install_tools,
+            setup::setup_git_init,
+            setup::setup_hide_folders,
+            setup::setup_complete,
+            agent::agent_authenticate,
+            agent::agent_login_terminal,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

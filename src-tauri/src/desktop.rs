@@ -11,6 +11,33 @@ use crate::state::{CmdResult, err};
 
 pub const CAPTURE: &str = "capture";
 
+static HOTKEY_ERROR: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+
+pub fn hotkey_error() -> Option<String> {
+    HOTKEY_ERROR.lock().unwrap().clone()
+}
+
+/// Wayland compositors don't allow apps to grab global shortcuts; users bind
+/// a system shortcut to `adjutant --capture` instead.
+pub fn is_wayland() -> bool {
+    cfg!(target_os = "linux")
+        && (std::env::var("XDG_SESSION_TYPE").is_ok_and(|v| v == "wayland")
+            || std::env::var_os("WAYLAND_DISPLAY").is_some())
+}
+
+/// The command that toggles quick capture from outside, for system shortcuts.
+pub fn capture_command() -> String {
+    let exe = std::env::var("APPIMAGE")
+        .ok()
+        .or_else(|| {
+            std::env::current_exe()
+                .ok()
+                .map(|p| p.display().to_string())
+        })
+        .unwrap_or_else(|| "adjutant".into());
+    format!("\"{exe}\" --capture")
+}
+
 pub fn setup(app: &AppHandle) -> tauri::Result<()> {
     build_tray(app)?;
     WebviewWindowBuilder::new(app, CAPTURE, WebviewUrl::App("capture".into()))
@@ -35,6 +62,9 @@ pub fn setup(app: &AppHandle) -> tauri::Result<()> {
     let settings = crate::settings::load(app);
     if let Err(e) = register_capture_hotkey(app, &settings.capture_hotkey) {
         tracing::warn!("quick capture hotkey: {e}");
+    }
+    if std::env::args().any(|a| a == "--capture") {
+        toggle_capture(app);
     }
     apply_autostart(app, settings.autostart);
 
@@ -127,15 +157,28 @@ pub fn toggle_capture(app: &AppHandle) {
 pub fn register_capture_hotkey(app: &AppHandle, hotkey: &str) -> CmdResult<()> {
     let gs = app.global_shortcut();
     let _ = gs.unregister_all();
+    *HOTKEY_ERROR.lock().unwrap() = None;
     if hotkey.trim().is_empty() {
         return Ok(());
     }
-    gs.on_shortcut(hotkey, |app, _shortcut, event| {
-        if event.state == ShortcutState::Pressed {
-            toggle_capture(app);
-        }
-    })
-    .map_err(|e| format!("could not register {hotkey}: {e}"))
+    let result = gs
+        .on_shortcut(hotkey, |app, _shortcut, event| {
+            if event.state == ShortcutState::Pressed {
+                toggle_capture(app);
+            }
+        })
+        .map_err(|e| format!("could not register {hotkey}: {e}"));
+    let result = match result {
+        Ok(()) if is_wayland() => Err(format!(
+            "Wayland doesn't let apps register global shortcuts. Add a system shortcut that runs {}",
+            capture_command()
+        )),
+        other => other,
+    };
+    if let Err(e) = &result {
+        *HOTKEY_ERROR.lock().unwrap() = Some(e.clone());
+    }
+    result
 }
 
 pub fn apply_autostart(app: &AppHandle, enabled: bool) {

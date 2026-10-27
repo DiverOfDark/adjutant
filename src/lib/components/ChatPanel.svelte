@@ -182,6 +182,18 @@
         </ol>
       {:else if item.kind === "permission"}
         <PermissionCard requestId={item.requestId} toolCall={item.toolCall} options={item.options} decided={item.decided} />
+      {:else if item.kind === "auth"}
+        <div class="auth">
+          <p><strong>{item.message}</strong></p>
+          <p class="sub">Most agents log in once with your account (Junie uses your JetBrains login). Then press Retry.</p>
+          <div class="authbtns">
+            {#each item.methods as m}
+              <button class="primary small" title={m.description ?? ""} onclick={() => chat.login(m)}>{m.name}</button>
+            {/each}
+            <button class="small" onclick={() => chat.login(null)}>Log in from a terminal</button>
+            <button class="small quiet" onclick={() => chat.retry()}>Retry</button>
+          </div>
+        </div>
       {:else if item.kind === "notice"}
         <div class="notice {item.level}">{item.text}</div>
       {/if}
@@ -390,6 +402,24 @@
   }
   .plan li[data-status="in_progress"] {
     font-weight: 700;
+  }
+  .auth {
+    padding: 0.7rem 0.8rem;
+    border-radius: var(--radius-m);
+    background: var(--brass-wash);
+    font-size: 0.85rem;
+    white-space: pre-wrap;
+  }
+  .auth p {
+    margin: 0 0 0.4rem;
+  }
+  .auth .sub {
+    color: var(--ink-2);
+  }
+  .authbtns {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
   }
   .notice {
     font-size: 0.8rem;

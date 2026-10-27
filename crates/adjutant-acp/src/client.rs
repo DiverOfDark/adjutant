@@ -10,15 +10,15 @@ use std::time::Duration;
 
 use agent_client_protocol::schema::ProtocolVersion;
 use agent_client_protocol::schema::v1::{
-    CancelNotification, ClientCapabilities, ContentBlock, CreateTerminalRequest,
-    CreateTerminalResponse, FileSystemCapabilities, Implementation, InitializeRequest,
-    KillTerminalRequest, KillTerminalResponse, McpServer, NewSessionRequest, PermissionOption,
-    PermissionOptionKind, PromptRequest, ReadTextFileRequest, ReadTextFileResponse,
-    ReleaseTerminalRequest, ReleaseTerminalResponse, RequestPermissionOutcome,
-    RequestPermissionRequest, RequestPermissionResponse, ResourceLink, SelectedPermissionOutcome,
-    SessionNotification, TerminalExitStatus, TerminalOutputRequest, TerminalOutputResponse,
-    TextContent, WaitForTerminalExitRequest, WaitForTerminalExitResponse, WriteTextFileRequest,
-    WriteTextFileResponse,
+    AuthenticateRequest, CancelNotification, ClientCapabilities, ContentBlock,
+    CreateTerminalRequest, CreateTerminalResponse, ErrorCode, FileSystemCapabilities,
+    Implementation, InitializeRequest, KillTerminalRequest, KillTerminalResponse, McpServer,
+    NewSessionRequest, PermissionOption, PermissionOptionKind, PromptRequest, ReadTextFileRequest,
+    ReadTextFileResponse, ReleaseTerminalRequest, ReleaseTerminalResponse,
+    RequestPermissionOutcome, RequestPermissionRequest, RequestPermissionResponse, ResourceLink,
+    SelectedPermissionOutcome, SessionNotification, TerminalExitStatus, TerminalOutputRequest,
+    TerminalOutputResponse, TextContent, WaitForTerminalExitRequest, WaitForTerminalExitResponse,
+    WriteTextFileRequest, WriteTextFileResponse,
 };
 use agent_client_protocol::{Agent, ByteStreams, Client, ConnectionTo, Error as AcpError};
 use anyhow::{Context as _, anyhow};
@@ -63,7 +63,12 @@ pub struct AgentInfo {
     pub agent_info: serde_json::Value,
     pub agent_capabilities: serde_json::Value,
     pub protocol_version: serde_json::Value,
+    /// ACP auth methods; non-empty when the agent may need a login.
+    pub auth_methods: serde_json::Value,
 }
+
+/// Marker in error messages when the agent needs a login first.
+pub const AUTH_REQUIRED: &str = "auth_required";
 
 enum Cmd {
     NewSession {
@@ -77,6 +82,10 @@ enum Cmd {
     },
     Cancel {
         session_id: String,
+    },
+    Authenticate {
+        method_id: String,
+        reply: oneshot::Sender<anyhow::Result<()>>,
     },
 }
 
@@ -261,6 +270,16 @@ impl AgentHandle {
         self.send(Cmd::Prompt {
             session_id: session_id.to_string(),
             parts,
+            reply,
+        })?;
+        rx.await.map_err(|_| anyhow!("agent connection closed"))?
+    }
+
+    /// Runs an ACP `authenticate` with one of [`AgentInfo::auth_methods`].
+    pub async fn authenticate(&self, method_id: &str) -> anyhow::Result<()> {
+        let (reply, rx) = oneshot::channel();
+        self.send(Cmd::Authenticate {
+            method_id: method_id.to_string(),
             reply,
         })?;
         rx.await.map_err(|_| anyhow!("agent connection closed"))?
@@ -560,6 +579,7 @@ where
                 agent_capabilities: serde_json::to_value(&init.agent_capabilities)
                     .unwrap_or_default(),
                 protocol_version: serde_json::to_value(init.protocol_version).unwrap_or_default(),
+                auth_methods: serde_json::to_value(&init.auth_methods).unwrap_or_default(),
             }));
 
             while let Some(cmd) = cmd_rx.recv().await {
@@ -577,7 +597,14 @@ where
                                 let resp = cx2
                                     .send_request(NewSessionRequest::new(cwd).mcp_servers(servers))
                                     .block_task()
-                                    .await?;
+                                    .await
+                                    .map_err(|e| {
+                                        if e.code == ErrorCode::AuthRequired {
+                                            anyhow!("{AUTH_REQUIRED}: {}", e.message)
+                                        } else {
+                                            anyhow::Error::from(e)
+                                        }
+                                    })?;
                                 Ok(resp.session_id.to_string())
                             }
                             .await;
@@ -607,6 +634,19 @@ where
                                     stop_reason: stop_reason.clone(),
                                 });
                             }
+                            let _ = reply.send(result);
+                            Ok(())
+                        })?;
+                    }
+                    Cmd::Authenticate { method_id, reply } => {
+                        let cx2 = cx.clone();
+                        cx.spawn(async move {
+                            let result = cx2
+                                .send_request(AuthenticateRequest::new(method_id))
+                                .block_task()
+                                .await
+                                .map(|_| ())
+                                .map_err(anyhow::Error::from);
                             let _ = reply.send(result);
                             Ok(())
                         })?;

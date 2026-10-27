@@ -233,6 +233,38 @@ impl VaultConfig {
         Ok(())
     }
 
+    /// Sets `[folders."<folder>"] agent = ...`, or removes the rule with `None`.
+    pub fn set_folder_agent(vault: &Path, folder: &str, agent: Option<&str>) -> anyhow::Result<()> {
+        let path = vault.join(CONFIG_PATH);
+        let text = std::fs::read_to_string(&path).unwrap_or_default();
+        let mut doc: toml_edit::DocumentMut = text.parse()?;
+        let folder = folder.trim_matches('/');
+        let folders = doc
+            .entry("folders")
+            .or_insert_with(|| {
+                let mut t = toml_edit::Table::new();
+                t.set_implicit(true);
+                toml_edit::Item::Table(t)
+            })
+            .as_table_like_mut()
+            .ok_or_else(|| anyhow::anyhow!("[folders] is not a table"))?;
+        match agent {
+            Some(a) => {
+                let mut t = toml_edit::Table::new();
+                t["agent"] = toml_edit::value(a);
+                folders.insert(folder, toml_edit::Item::Table(t));
+            }
+            None => {
+                folders.remove(folder);
+            }
+        }
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        std::fs::write(&path, doc.to_string())?;
+        Ok(())
+    }
+
     /// Folders hidden from agents (`[folders."x"] agent = "none"`).
     pub fn hidden_folders(&self) -> Vec<String> {
         self.folders
@@ -331,6 +363,24 @@ mod tests {
         ));
         assert!(matches!(cfg.schedules[2].job, JobConfig::JiraSync));
         assert_eq!(cfg.hotkeys.capture, "CommandOrControl+Shift+Space");
+    }
+
+    #[test]
+    fn set_folder_agent_adds_and_removes() {
+        let dir = tempfile::tempdir().unwrap();
+        VaultConfig::set_folder_agent(dir.path(), "people", Some("none")).unwrap();
+        VaultConfig::set_folder_agent(dir.path(), "me/", Some("none")).unwrap();
+        let cfg = VaultConfig::load(dir.path()).unwrap();
+        assert_eq!(
+            cfg.hidden_folders(),
+            vec!["me".to_string(), "people".to_string()]
+        );
+        assert_eq!(cfg.folder_agent("people/alex.md"), Some("none"));
+        VaultConfig::set_folder_agent(dir.path(), "people", None).unwrap();
+        assert_eq!(
+            VaultConfig::load(dir.path()).unwrap().hidden_folders(),
+            vec!["me".to_string()]
+        );
     }
 
     #[test]

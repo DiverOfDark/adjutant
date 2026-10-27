@@ -109,7 +109,9 @@
         </div>
         <label class="check"><input type="checkbox" bind:checked={settings.autostart} /> Start Adjutant when I log in</label>
         <label class="check"><input type="checkbox" bind:checked={settings.closeToTray} /> Closing the window keeps Adjutant running in the tray</label>
+        <label class="check"><input type="checkbox" bind:checked={settings.checkUpdates} /> Check GitHub for updates</label>
         <label>Quick capture shortcut <input bind:value={settings.captureHotkey} placeholder="CommandOrControl+Shift+Space" /></label>
+        {#if settings.hotkeyError}<p class="status bad">{settings.hotkeyError}</p>{/if}
         <div class="btns"><button class="primary" onclick={saveApp}>Save</button></div>
       </div>
     </section>
@@ -144,6 +146,7 @@
       <p>{app.vault?.path}</p>
     </div>
     <div class="form">
+      <button onclick={() => app.go({ kind: "setup" })}>Run setup again</button>
       <button onclick={async () => { const { open } = await import("@tauri-apps/plugin-dialog"); const d = await open({ directory: true }); if (typeof d === "string") await app.openVault(d); }}>Open another vault</button>
     </div>
   </section>

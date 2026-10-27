@@ -1176,18 +1176,11 @@ mod tests {
                 "morning-plan"
             ]
         );
-        let morning = cfg
-            .schedules
-            .iter()
-            .find(|s| s.id == "morning-plan")
-            .unwrap();
-        assert!(!morning.enabled);
-        assert!(
-            cfg.schedules
-                .iter()
-                .filter(|s| s.id != "morning-plan")
-                .all(|s| s.enabled)
-        );
+        // Deterministic jobs run from the start; agent jobs spend credits and are opt-in.
+        for s in &cfg.schedules {
+            let is_agent = matches!(s.job, crate::config::JobConfig::Agent { .. });
+            assert_eq!(s.enabled, !is_agent, "{}", s.id);
+        }
         // Commented-out examples must be valid TOML once uncommented.
         let uncommented: String = read(&v, ".vault/config.toml")
             .lines()

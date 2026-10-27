@@ -14,6 +14,10 @@ pub struct AppSettings {
     pub autostart: bool,
     pub capture_hotkey: String,
     pub close_to_tray: bool,
+    /// Ask GitHub releases for app updates (the only request the app itself makes).
+    pub check_updates: bool,
+    /// Vaults whose first-run setup was completed.
+    pub setup_done: Vec<PathBuf>,
 }
 
 impl Default for AppSettings {
@@ -23,6 +27,8 @@ impl Default for AppSettings {
             autostart: false,
             capture_hotkey: "CommandOrControl+Shift+Space".into(),
             close_to_tray: true,
+            check_updates: true,
+            setup_done: Vec::new(),
         }
     }
 }
@@ -56,6 +62,10 @@ pub struct AppSettingsView {
     pub autostart: bool,
     pub capture_hotkey: String,
     pub close_to_tray: bool,
+    pub check_updates: bool,
+    /// Set when the global shortcut could not be registered (e.g. Wayland).
+    #[serde(default, skip_deserializing)]
+    pub hotkey_error: Option<String>,
 }
 
 #[tauri::command]
@@ -65,6 +75,8 @@ pub fn app_settings(app: AppHandle) -> AppSettingsView {
         autostart: s.autostart,
         capture_hotkey: s.capture_hotkey,
         close_to_tray: s.close_to_tray,
+        check_updates: s.check_updates,
+        hotkey_error: crate::desktop::hotkey_error(),
     }
 }
 
@@ -75,6 +87,7 @@ pub fn app_save_settings(app: AppHandle, settings: AppSettingsView) -> CmdResult
     s.autostart = settings.autostart;
     s.capture_hotkey = settings.capture_hotkey;
     s.close_to_tray = settings.close_to_tray;
+    s.check_updates = settings.check_updates;
     save(&app, &s)?;
     crate::desktop::apply_autostart(&app, s.autostart);
     if hotkey_changed {

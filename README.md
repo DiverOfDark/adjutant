@@ -37,6 +37,9 @@ without spending agent credits.
 
 ## Install
 
+New here? Follow [Getting started](docs/getting-started.md): install, mise,
+and a guided setup for the agent, privacy and schedules.
+
 Download the latest build for Linux (AppImage, deb, rpm), macOS (dmg) or
 Windows (exe) from [Releases](https://github.com/DiverOfDark/adjutant/releases/latest).
 Every push to `main` is a release (`0.1.<run>`); the app downloads updates in
