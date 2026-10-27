@@ -1,0 +1,5 @@
+# Keep LF everywhere: embedded templates (include_str!) and tests depend on it.
+* text=auto eol=lf
+*.png binary
+*.ico binary
+*.icns binary
