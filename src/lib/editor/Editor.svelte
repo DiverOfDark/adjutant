@@ -9,7 +9,8 @@
   import { autocompletion, closeBrackets, type CompletionContext } from "@codemirror/autocomplete";
   import { searchKeymap, highlightSelectionMatches } from "@codemirror/search";
   import { tags as t } from "@lezer/highlight";
-  import { livePreview } from "./livePreview";
+  import { livePreview, type PreviewHooks } from "./livePreview";
+  import { tablePreview } from "./tables";
   import { app, personName } from "$lib/app.svelte";
 
   let {
@@ -97,6 +98,14 @@
     ".cm-inline-code": { fontFamily: "var(--font-mono)", fontSize: "0.86em", background: "var(--sunken)", borderRadius: "4px", padding: "0.1em 0.25em" },
     ".cm-codeblock": { fontFamily: "var(--font-mono)", fontSize: "0.86em", background: "var(--sunken)", lineHeight: "1.55" },
     ".cm-quote": { borderLeft: "3px solid var(--rule-strong)", paddingLeft: "0.9rem !important", color: "var(--ink-2)" },
+    ".cm-table-wrap": { overflowX: "auto", margin: "0.4rem 0 0.6rem", cursor: "text" },
+    ".cm-table": { borderCollapse: "collapse", fontSize: "0.94em", lineHeight: "1.45" },
+    ".cm-table th, .cm-table td": { border: "1px solid var(--rule)", padding: "0.3rem 0.7rem", verticalAlign: "top", textAlign: "left" },
+    ".cm-table th": { background: "var(--sunken)", fontWeight: "650" },
+    ".cm-table tbody tr:nth-child(even) td": { background: "color-mix(in srgb, var(--sunken) 45%, transparent)" },
+    ".cm-table code": { fontFamily: "var(--font-mono)", fontSize: "0.88em", background: "var(--sunken)", padding: "0.05em 0.3em", borderRadius: "3px" },
+    ".cm-table a": { color: "var(--verdigris)", textDecoration: "none", cursor: "pointer" },
+    ".cm-table a:hover": { textDecoration: "underline" },
     ".cm-hr": { display: "inline-block", width: "100%", borderTop: "1px solid var(--rule-strong)", verticalAlign: "middle" },
     ".cm-link": { color: "var(--verdigris)", textDecoration: "underline", textUnderlineOffset: "2px", cursor: "pointer" },
     ".cm-wikilink": { color: "var(--verdigris)", fontWeight: "600", cursor: "pointer", textDecoration: "none" },
@@ -159,25 +168,28 @@
     scrollToLine(line);
   });
 
+  const previewHooks: PreviewHooks = {
+    followLink: (target) => app.followLink(target),
+    jiraStatus: (key) => {
+      const i = app.jira?.issues[key];
+      return i ? { status: i.status, category: i.statusCategory, summary: i.summary } : null;
+    },
+    openUrl: async (url) => {
+      const href = url.startsWith("jira:") ? `${app.jira?.baseUrl ?? ""}/browse/${url.slice(5)}` : url;
+      try {
+        const { openUrl } = await import("@tauri-apps/plugin-opener");
+        await openUrl(href);
+      } catch {
+        window.open(href, "_blank");
+      }
+    },
+  };
+
   const markdownExtensions = (): Extension[] => [
     markdown({ base: markdownLanguage, codeLanguages: languages, addKeymap: true }),
     autocompletion({ override: [wikilinkCompletion, tagCompletion], icons: false }),
-    livePreview({
-      followLink: (target) => app.followLink(target),
-      jiraStatus: (key) => {
-        const i = app.jira?.issues[key];
-        return i ? { status: i.status, category: i.statusCategory, summary: i.summary } : null;
-      },
-      openUrl: async (url) => {
-        const href = url.startsWith("jira:") ? `${app.jira?.baseUrl ?? ""}/browse/${url.slice(5)}` : url;
-        try {
-          const { openUrl } = await import("@tauri-apps/plugin-opener");
-          await openUrl(href);
-        } catch {
-          window.open(href, "_blank");
-        }
-      },
-    }),
+    livePreview(previewHooks),
+    tablePreview(previewHooks),
     cmPlaceholder("Start writing. [[ links a note, #tag tags it, - [ ] makes a task."),
   ];
 

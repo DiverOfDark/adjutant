@@ -53,7 +53,7 @@ Senior engineer on the Platform team. Wants to lead the ingestion rewrite.
 `,
   "people/sam.md": "# Sam Roe\n\nEngineer, Platform team. Running the load tests for PLAT-123.\n",
   "people/maria.md": "# Maria Lopez\n\nEngineering manager, Data team.\n",
-  "teams/platform/roadmap.md": "# Platform roadmap\n\n## Q1 candidates\n- Ingestion rewrite ([[people/alex]])\n- Alert noise reduction\n",
+  "teams/platform/roadmap.md": "# Platform roadmap\n\n## Q1 candidates\n- Ingestion rewrite ([[people/alex]])\n- Alert noise reduction\n\n## Staffing\n\n| Project | Owner | Est. | Status |\n|:--|:--|--:|:-:|\n| Ingestion rewrite | [[people/alex|Alex]] | 6 wk | **on track** |\n| Alert noise | [[people/sam]] | 2 wk | blocked on PLAT-130 |\n| Shard balancer | [[people/maria\\|Maria]] | 4 wk | `a \\| b` pipes |\n\nNotes after the table.\n",
   "teams/platform/incidents.md": "# Incidents\n\n## INC-42 — rebalancing stalled\nOwner: [[people/alex]]\n",
   "me/goals.md": "# My goals\n\n- Grow two senior engineers into tech leads.\n- Ship the ingestion rewrite by end of Q1.\n",
   "inbox/2026-10-27-alert-noise.md": "ask platform about rebalancing alert noise - too many pages last week, maybe tune thresholds. Sam mentioned PLAT-130.\n",
