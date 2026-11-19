@@ -78,11 +78,15 @@
     { tag: t.meta, color: "var(--faint)" },
   ]);
 
+  const TEXT_WIDTH = "46rem";
+  const TABLE_GUTTER = "1.5rem";
+
   const theme = EditorView.theme({
     "&": { height: "100%", fontSize: "1rem", background: "transparent" },
     "&.cm-focused": { outline: "none" },
-    ".cm-scroller": { fontFamily: "var(--font-ui)", lineHeight: "1.7", overflow: "auto" },
-    ".cm-content": { maxWidth: "46rem", margin: "0 auto", padding: "0 0 40vh", caretColor: "var(--verdigris)" },
+    // A size container, so tables can measure the full editor width (cqw).
+    ".cm-scroller": { fontFamily: "var(--font-ui)", lineHeight: "1.7", overflow: "auto", containerType: "inline-size" },
+    ".cm-content": { maxWidth: TEXT_WIDTH, margin: "0 auto", padding: "0 0 40vh", caretColor: "var(--verdigris)" },
     ".cm-line": { padding: "0 2px" },
     ".cm-activeLine": { background: "transparent" },
     ".cm-cursor": { borderLeftColor: "var(--verdigris)", borderLeftWidth: "2px" },
@@ -98,7 +102,17 @@
     ".cm-inline-code": { fontFamily: "var(--font-mono)", fontSize: "0.86em", background: "var(--sunken)", borderRadius: "4px", padding: "0.1em 0.25em" },
     ".cm-codeblock": { fontFamily: "var(--font-mono)", fontSize: "0.86em", background: "var(--sunken)", lineHeight: "1.55" },
     ".cm-quote": { borderLeft: "3px solid var(--rule-strong)", paddingLeft: "0.9rem !important", color: "var(--ink-2)" },
-    ".cm-table-block": { position: "relative", width: "fit-content", maxWidth: "100%", margin: "0.4rem 0 0.6rem" },
+    // Tables break out of the text column to the editor's full width (less a
+    // gutter): one centered grid track, at least as wide as the text so narrow
+    // tables stay aligned with it, growing up to the table's natural width.
+    ".cm-table-block": {
+      display: "grid",
+      gridTemplateColumns: `minmax(min(100%, ${TEXT_WIDTH}), max-content)`,
+      justifyContent: "center",
+      width: `max(100%, 100cqw - ${TABLE_GUTTER} * 2)`,
+      margin: `0.4rem 0 0.6rem calc((100% - max(100%, 100cqw - ${TABLE_GUTTER} * 2)) / 2)`,
+    },
+    ".cm-table-frame": { position: "relative", justifySelf: "start", minWidth: "0", maxWidth: "100%" },
     ".cm-table-wrap": { overflowX: "auto", cursor: "text" },
     ".cm-table-raw": {
       position: "absolute",
@@ -117,7 +131,7 @@
       opacity: "0",
       transition: "opacity 120ms",
     },
-    ".cm-table-block:hover .cm-table-raw": { opacity: "1" },
+    ".cm-table-frame:hover .cm-table-raw": { opacity: "1" },
     ".cm-table-raw:hover": { color: "var(--verdigris)", borderColor: "var(--verdigris)" },
     ".cm-table-menu": {
       position: "fixed",
@@ -137,7 +151,9 @@
     ".cm-table-menu button.danger:not(:disabled)": { color: "var(--signal)" },
     ".cm-table-menu-sep": { border: "none", borderTop: "1px solid var(--rule)", margin: "0.25rem 0.3rem" },
     ".cm-table .cm-cell-editing": { outline: "2px solid var(--verdigris)", outlineOffset: "-2px", background: "var(--sheet) !important", whiteSpace: "pre-wrap", caretColor: "var(--verdigris)" },
-    ".cm-table": { borderCollapse: "collapse", fontSize: "0.94em", lineHeight: "1.45" },
+    // Undo CodeMirror's word-break: break-word, which lets the table squeeze
+    // columns down to single letters instead of wrapping between words.
+    ".cm-table": { borderCollapse: "collapse", fontSize: "0.94em", lineHeight: "1.45", overflowWrap: "break-word", wordBreak: "normal" },
     ".cm-table th, .cm-table td": { border: "1px solid var(--rule)", padding: "0.3rem 0.7rem", verticalAlign: "top", textAlign: "left" },
     ".cm-table th": { background: "var(--sunken)", fontWeight: "650" },
     ".cm-table tbody tr:nth-child(even) td": { background: "color-mix(in srgb, var(--sunken) 45%, transparent)" },

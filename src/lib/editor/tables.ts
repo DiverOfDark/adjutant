@@ -285,7 +285,11 @@ class TableWidget extends WidgetType {
     const wrap = document.createElement("div");
     wrap.className = "cm-table-wrap";
     wrap.append(this.table());
-    dom.append(wrap, raw);
+    // The block spans the editor's full width; the frame hugs the table.
+    const frame = document.createElement("div");
+    frame.className = "cm-table-frame";
+    frame.append(wrap, raw);
+    dom.append(frame);
     shown.set(dom, this);
     attachEditing(dom, view);
     return dom;
